@@ -1,7 +1,8 @@
 {
   "name": "miniloom",
+  "productName": "MiniHF MiniLoom",
   "version": "1.0.0",
-  "description": "",
+  "description": "MiniHF MiniLoom - AI Text Generation Tool",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
