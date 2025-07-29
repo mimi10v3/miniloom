@@ -215,44 +215,21 @@
         height: 35px;
         width: 50px;
         font-size: 30px;
-        animation-name: spin;
-        animation-duration: 0.4s;
-        animation-iteration-count: infinite;
+        display: inline-block;
+        transform-origin: center center;
+        animation: spin 0.4s linear infinite;
+        text-align: center; /* Center the character horizontally */
+        line-height: 35px; /* Center the character vertically */
       }
 
       @keyframes spin {
-        10% {
-          transform: rotate(36deg);
+        from {
+          transform: rotate(0deg);
         }
-        20% {
-          transform: rotate(72deg);
-        }
-        30% {
-          transform: rotate(108deg);
-        }
-        40% {
-          transform: rotate(144deg);
-        }
-        50% {
-          transform: rotate(180deg);
-        }
-        60% {
-          transform: rotate(216deg);
-        }
-        70% {
-          transform: rotate(252deg);
-        }
-        80% {
-          transform: rotate(288deg);
-        }
-        90% {
-          transform: rotate(324deg);
-        }
-        100% {
+        to {
           transform: rotate(360deg);
         }
       }
-
       #batch-item-index {
         margin-left: 0.5em;
         align-self: center;
