@@ -595,7 +595,7 @@ window.renderTick = function () {
     rewriteButton.textContent = "💬";
     rewriteButton.onclick = () => promptRewriteNode(focus.id);
 
-    branchControlButtonsDiv.append(rewriteButton);
+    //    branchControlButtonsDiv.append(rewriteButton);
   }
   const quickRollSpan = document.createElement("span");
   quickRollSpan.classList.add("reroll");
