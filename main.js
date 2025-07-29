@@ -13,6 +13,8 @@ let mainWindow;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    title: "MiniLoom",
+    icon: path.join(__dirname, "assets/minihf_logo_no_text.png"),
     width: 800,
     height: 600,
     webPreferences: {
@@ -145,7 +147,15 @@ ipcMain.handle("auto-save", (event, data) => {
   fs.writeFileSync(miniLoomSettingsFilePath, JSON.stringify(miniLoomSettings));
 });
 
-app.whenReady().then(createWindow);
+app
+  .whenReady()
+  .then(() => {
+    app.setName("MiniLoom");
+    if (process.platform === "darwin") {
+      app.dock.setIcon(path.join(__dirname, "assets/minihf_logo_no_text.png"));
+    }
+  })
+  .then(createWindow);
 
 app.on("window-all-closed", function () {
   if (process.platform !== "darwin") app.quit();
