@@ -114,67 +114,84 @@ class LoomTree {
   }
 }
 
-function renderTree(node, container, maxParents) {
-  for (let i = 0; i < maxParents; i++) {
+const MAX_PARENTS = 2;
+const MAX_CHILDREN = 5;
+
+function renderTree(node, container) {
+  let parentIds = [];
+  for (let i = 0; i < MAX_PARENTS; i++) {
     if (node.parent === null) {
-      break; // Handle root node
+      break; // Stop at root node
     }
+    parentIds.push(node.parent);
     node = loomTree.nodeStore[node.parent];
   }
+
   const ul = document.createElement("ul");
-  const li = document.createElement("li");
-  if (node.id == focus.id) {
-    li.id = "focused-node";
+  const li = createTreeLi(node, 1, false, parentIds);
+  if (node.parent) {
+    li.classList.add("hidden-parents");
   }
-  const span = document.createElement("span");
-  span.textContent = node.summary;
-  span.onclick = () => changeFocus(node.id);
-  li.appendChild(span);
   ul.appendChild(li);
-
-  if (node.children.length > 0) {
-    renderChildren(node, li, 5);
-  }
-
+  renderChildren(node, li, MAX_CHILDREN, parentIds);
   container.appendChild(ul);
 }
 
-function renderChildren(node, container, maxChildren) {
-  if (maxChildren <= 0) return; // Stop recursion when maxChildren reaches 0
+function renderChildren(node, container, maxChildrenDepth, parentIds) {
+  if (maxChildrenDepth <= 0) return; // Stop recursion when maxChildrenDepth reaches 0 or there are no children
   if (node.children.length == 0) return;
 
   const childrenUl = document.createElement("ul");
-
   for (let i = 0; i < node.children.length; i++) {
-    let child = loomTree.nodeStore[node.children[i]];
-    let childLi = document.createElement("li");
-    let childSpan = document.createElement("span");
-    if (child.id == focus.id) {
-      childLi.id = "focused-node";
-    }
-    if (child.read) {
-      childSpan.classList.add("read-tree-node");
-    }
-    childSpan.textContent = child.summary;
-    childSpan.onclick = (event) => {
-      event.stopPropagation(); // Stop event bubbling
-      changeFocus(child.id);
-    };
-    childLi.append(childSpan);
-    childrenUl.appendChild(childLi);
+    const child = loomTree.nodeStore[node.children[i]];
+    const li = createTreeLi(child, i + 1, maxChildrenDepth <= 1, parentIds);
+    childrenUl.appendChild(li);
+    renderChildren(child, li, maxChildrenDepth - 1, parentIds);
+  }
+  container.appendChild(childrenUl);
+}
 
-    // Recursively render the children of this child, decrementing maxChildren
-    renderChildren(child, childLi, maxChildren - 1);
+function createTreeLi(node, index, isMaxDepth, parentIds) {
+  // todo: consider using up/down votes to adjust max depth of children displayed
+  // todo: consider adding a die icon for generation in progress / an error icon if it fails
+
+  const li = document.createElement("li");
+  const nodeSpan = document.createElement("span");
+
+  if (node.id == focus.id) {
+    nodeSpan.id = "focused-node";
+  }
+  nodeSpan.classList.add(node.read ? "read-tree-node" : "unread-tree-node");
+  nodeSpan.classList.add("type-" + node.type);
+
+  if (parentIds && parentIds.includes(node.id)) {
+    nodeSpan.classList.add("parent-of-focused");
+  }
+  if (node.rating === true || node.rating === false) {
+    nodeSpan.classList.add(node.rating ? "upvoted" : "downvoted");
+  }
+  if (isMaxDepth && node.children && node.children.length > 0) {
+    nodeSpan.classList.add("hidden-children");
   }
 
-  container.appendChild(childrenUl);
+  const link = document.createElement("a");
+  link.textContent = (node.summary || "").trim() || "Option " + index;
+  link.title = index + ". " + link.textContent;
+
+  link.onclick = (event) => {
+    event.stopPropagation(); // Stop event bubbling
+    changeFocus(node.id);
+  };
+  nodeSpan.append(link);
+  li.append(nodeSpan);
+  return li;
 }
 
 var loomTree = new LoomTree();
 const loomTreeView = document.getElementById("loom-tree-view");
 let focus = loomTree.nodeStore["1"];
 let samplerSettingsStore = {};
-renderTree(loomTree.root, loomTreeView, 2);
+renderTree(loomTree.root, loomTreeView);
 
 function renderTick() {
   editor.value = "";
@@ -233,6 +250,7 @@ function renderTick() {
 
   branchControlButtonsDiv.append(leftThumbSpan, rightThumbSpan);
 
+  // TODO: re-enable or remove this feature
   if (focus.type === "gen") {
     const rewriteButton = document.createElement("span");
     rewriteButton.id = "rewrite-button";
@@ -265,7 +283,7 @@ function renderTick() {
 
   focus.read = true;
   loomTreeView.innerHTML = "";
-  renderTree(focus, loomTreeView, 2);
+  renderTree(focus, loomTreeView);
   errorMessage.textContent = "";
   updateCounterDisplay(editor.value);
 }
@@ -286,7 +304,7 @@ function changeFocus(newFocusId) {
   // Prevent focus change from interrupting users typing
   if (focus.type === "user" && focus.children.length == 0) {
     loomTreeView.innerHTML = "";
-    renderTree(focus, loomTreeView, 2);
+    renderTree(focus, loomTreeView);
   } else {
     renderTick();
     editor.selectionStart = editor.value.length;
@@ -995,7 +1013,7 @@ editor.addEventListener("keydown", async (e) => {
       }
       // Render only the loom tree so we don't interrupt their typing
       loomTreeView.innerHTML = "";
-      renderTree(focus, loomTreeView, 2);
+      renderTree(focus, loomTreeView);
     }
     return null;
   } else if (!e.shiftKey) {

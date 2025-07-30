@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <style>
+      :root {
+        --barn-red: #750504ff;
+        --black-olive: #293121ff;
+        --oxford-blue: #142b4fff;
+        --night: #0d0e10ff;
+        --engineering-orange: #d50402ff;
+      }
+
       body {
         font-family: sans-serif;
         display: flex;
@@ -136,18 +144,6 @@
         opacity: 1;
       }
 
-      .read-tree-node {
-        opacity: 0.6;
-      }
-
-      #focused-node > span {
-        font-weight: bold;
-      }
-
-      #focused-node {
-        opacity: 1 !important;
-      }
-
       .branch-controls {
         display: flex;
         flex-direction: column;
@@ -265,22 +261,171 @@
       }
 
       /* Tree view styling */
-      #loom-tree-view {
+
+      .hidden-parents > a::before {
+        content: '⋯ ';
+        color: rgba(41, 49, 33, 0.6);
+        font-weight: bold;
+        font-size: 0.9em;
+      }
+
+      .hidden-children > a::after {
+        content: ' ⋯';
+        color: rgba(41, 49, 33, 0.6);
+        font-weight: bold;
+        font-size: 0.9em;
+      }
+
+    #loom-tree-view {
         flex: 1;
-        margin-left: 1em; /* Default margin, will be overridden by JS when search is added */
+        margin-left: 0px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.3;
       }
 
       #loom-tree-view ul {
         margin-top: 0.2em;
-        padding-left: 1.5em;
+        padding-left: 1.2em;
         margin-left: 0em;
+        list-style: none;
+        position: relative;
       }
 
-      #loom-tree-view span {
-        min-height: 1em;
-        min-width: 8em;
-        display: inline-block;
+      #loom-tree-view > ul {
+        padding-left: 0.4em;
       }
+
+      #loom-tree-view ul::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: rgba(41, 49, 33, 0.2);
+      }
+
+      #loom-tree-view li:last-child::after {
+        content: '';
+        position: absolute;
+        left: -1.2em;
+        top: 0.8em;
+        bottom: -30px;
+        width: 1px;
+        background: white;
+        z-index: 2;
+      }
+
+      #loom-tree-view li::before {
+        content: '';
+        position: absolute;
+        left: -1.2em;
+        top: 0.8em;
+        width: 0.8em;
+        height: 1px;
+        background: rgba(41, 49, 33, 0.2);
+      }
+
+      #loom-tree-view li {
+        position: relative;
+        margin: 2px 0;
+      }
+
+      #loom-tree-view li a {
+        min-height: 1.2em;
+        min-width: 8em;
+        max-width: 200px;
+        display: inline-block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding: 3px 7px;
+        border-radius: 4px;
+        text-decoration: none;
+        color: var(--night);
+        background: transparent;
+        transition: all 0.2s ease;
+        position: relative;
+      }
+      #loom-tree-view > ul::before { content: none; }
+      .downvoted,
+      .downvoted * {
+        opacity: 0.7;
+      }
+
+      #focused-node > a {
+        background: rgba(213, 4, 2, 0.1);
+        color: var(--barn-red) !important; /* Only active node gets color */
+        font-weight: 600;
+        box-shadow: inset 4px 0 0 var(--engineering-orange);
+        padding-left: 12px;
+      }
+
+      .parent-of-focused > a {
+        background: rgba(213, 4, 2, 0.04);
+        font-weight: 500;
+        box-shadow: inset 2px 0 0 rgba(213, 4, 2, 0.3);
+        padding-left: 10px;
+      }
+
+      #loom-tree-view li a:hover {
+        cursor: pointer;
+        background: rgba(213, 4, 2, 0.06);
+        box-shadow: inset 2px 0 0 rgba(213, 4, 2, 0.4);
+        padding-left: 10px;
+        transform: translateX(1px);
+      }
+
+      /* Don't change focused node on hover */
+      #focused-node > a:hover {
+        transform: none;
+        background: rgba(213, 4, 2, 0.1);
+        box-shadow: inset 4px 0 0 var(--engineering-orange);
+        padding-left: 12px;
+      }
+
+      .unread-tree-node > a {
+        font-style: italic;
+        font-weight: 500;
+      }
+
+      .unread-tree-node > a::before {
+        content: '● ';
+        color: #7bb3f0;
+        font-size: 0.7em;
+        display: inline;
+        margin-right: 2px;
+      }
+
+      .type-user > a::after {
+        content: ' 👤';
+        font-size: 0.8em;
+      }
+
+      .upvoted > a::after {
+        content: ' 👍';
+        font-size: 0.8em;
+      }
+
+      .downvoted > a::after {
+        content: ' 👎';
+        font-size: 0.8em;
+      }
+
+
+      /* Conflicts: hidden + votes */
+      .hidden-parents.upvoted > a::after {
+        content: ' 👍⋯';
+        font-size: 0.8em;
+      }
+
+      .hidden-parents.downvoted > a::after {
+        content: ' 👎⋯';
+        font-size: 0.8em;
+      }
+
+      /* end tree styling */
 
       #error-message {
         color: red;
@@ -355,7 +500,7 @@
   </head>
   <body>
     <div id="settings-pane">
-      <form id="sampler-setings">
+      <form id="sampler-settings">
         <p>Sampler Settings</p>
         <label for="sampler">Sampling Method</label>
         <select id="sampler">
@@ -395,8 +540,8 @@
     <!-- Original tree view structure -->
     <div id="loom-tree-view"></div>
 
-    <!--
-    <div id="right-panes">
+    
+    <div id="right-panes" style="display:none;"">
       <div id="agent-pane">
         <form>
           <p>Weave Tree Search Settings</p>
@@ -414,7 +559,7 @@
       </div>
       <div id="chat-pane"></div>
     </div>
-    -->
+    
 
     <!-- Include both original and search scripts -->
     <script src="renderer.js"></script>

@@ -274,35 +274,12 @@ function renderSearchResults(query, container) {
 }
 
 // Modified renderTree function to support search mode
-function renderTreeOrSearch(node, container, maxParents) {
+function renderTreeOrSearch(node, container) {
   if (searchResultsMode && currentSearchQuery.trim()) {
     renderSearchResults(currentSearchQuery, container);
     return;
   }
-
-  // Original renderTree logic
-  for (let i = 0; i < maxParents; i++) {
-    if (node.parent === null) {
-      break;
-    }
-    node = loomTree.nodeStore[node.parent];
-  }
-  const ul = document.createElement("ul");
-  const li = document.createElement("li");
-  if (node.id == focus.id) {
-    li.id = "focused-node";
-  }
-  const span = document.createElement("span");
-  span.textContent = node.summary;
-  span.onclick = () => changeFocus(node.id);
-  li.appendChild(span);
-  ul.appendChild(li);
-
-  if (node.children.length > 0) {
-    renderChildren(node, li, 5);
-  }
-
-  container.appendChild(ul);
+  renderTree(node, container);
 }
 
 // Override the original createNode to update search index
@@ -623,7 +600,7 @@ window.renderTick = function () {
   focus.read = true;
   const loomTreeView = document.getElementById("loom-tree-view");
   loomTreeView.innerHTML = "";
-  renderTreeOrSearch(focus, loomTreeView, 2); // Use our new function
+  renderTreeOrSearch(focus, loomTreeView); // Use our new function
   errorMessage.textContent = "";
   updateCounterDisplay(editor.value);
 };
