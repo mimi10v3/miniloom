@@ -1,23 +1,30 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electron');
-const fs = require('fs');
-const path = require('path');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  MenuItem,
+} = require("electron");
+const fs = require("fs");
+const path = require("path");
 
 let mainWindow;
 
 function createWindow() {
-    mainWindow = new BrowserWindow({
-        width: 800,
-        height: 600,
-        webPreferences: {
-            nodeIntegration: true,
-	    contextIsolation: false,
-        }
-    });
-
-
+  mainWindow = new BrowserWindow({
+    title: "MiniLoom",
+    icon: path.join(__dirname, "assets/minihf_logo_no_text.png"),
+    width: 800,
+    height: 600,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
 
   // Get the existing menu template
-  const existingMenuTemplate = Menu.getApplicationMenu().items.map(item => {
+  const existingMenuTemplate = Menu.getApplicationMenu().items.map((item) => {
     return {
       label: item.label,
       submenu: item.submenu.items,
@@ -27,60 +34,64 @@ function createWindow() {
   // Define new items for the File menu
   const fileMenuItems = [
     {
-      label: 'Save',
-      accelerator: 'CmdOrCtrl+S',
+      label: "Save",
+      accelerator: "CmdOrCtrl+S",
       click() {
-        mainWindow.webContents.send('invoke-action', 'save-file');
-      }
+        mainWindow.webContents.send("invoke-action", "save-file");
+      },
     },
     {
-      label: 'Load',
-      accelerator: 'CmdOrCtrl+O',
+      label: "Load",
+      accelerator: "CmdOrCtrl+O",
       click() {
-        mainWindow.webContents.send('invoke-action', 'load-file');
-      }
+        mainWindow.webContents.send("invoke-action", "load-file");
+      },
     },
-    { type: 'separator' },  // Separator
+    { type: "separator" }, // Separator
   ];
 
   // Find the File menu in the existing template
-  const fileMenuIndex = existingMenuTemplate.findIndex(item => item.label === 'File');
+  const fileMenuIndex = existingMenuTemplate.findIndex(
+    (item) => item.label === "File"
+  );
 
   if (fileMenuIndex >= 0) {
     // If File menu exists, append new items to it
-    existingMenuTemplate[fileMenuIndex].submenu = fileMenuItems.concat(existingMenuTemplate[fileMenuIndex].submenu);
+    existingMenuTemplate[fileMenuIndex].submenu = fileMenuItems.concat(
+      existingMenuTemplate[fileMenuIndex].submenu
+    );
   } else {
     // If File menu doesn't exist, add it
     existingMenuTemplate.unshift({
-      label: 'File',
-      submenu: fileMenuItems
+      label: "File",
+      submenu: fileMenuItems,
     });
   }
 
   // Build and set the new menu
   const newMenu = Menu.buildFromTemplate(existingMenuTemplate);
   Menu.setApplicationMenu(newMenu);
-    
-    mainWindow.loadFile('index.html');
 
-    mainWindow.on('closed', function () {
-        mainWindow = null;
-    });
+  mainWindow.loadFile("index.html");
+
+  mainWindow.on("closed", function () {
+    mainWindow = null;
+  });
 }
 
 let autoSavePath = null;
 
-ipcMain.handle('save-file', async (event, data) => {
+ipcMain.handle("save-file", async (event, data) => {
   let filePath;
   if (autoSavePath) {
     filePath = autoSavePath;
   } else {
     const { filePath: chosenPath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Save File',
-      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+      title: "Save File",
+      filters: [{ name: "JSON Files", extensions: ["json"] }],
     });
     filePath = chosenPath;
-    autoSavePath = chosenPath;  // Update auto-save path
+    autoSavePath = chosenPath; // Update auto-save path
   }
 
   if (filePath) {
@@ -88,67 +99,79 @@ ipcMain.handle('save-file', async (event, data) => {
   }
 });
 
-ipcMain.handle('load-file', async (event) => {
+ipcMain.handle("load-file", async (event) => {
   const { filePaths } = await dialog.showOpenDialog(mainWindow, {
-    title: 'Load File',
-    filters: [{ name: 'JSON Files', extensions: ['json'] }],
-    properties: ['openFile'],
+    title: "Load File",
+    filters: [{ name: "JSON Files", extensions: ["json"] }],
+    properties: ["openFile"],
   });
 
   if (filePaths && filePaths.length > 0) {
-    const content = fs.readFileSync(filePaths[0], 'utf8');
-    autoSavePath = filePaths[0];  // Update auto-save path
+    const content = fs.readFileSync(filePaths[0], "utf8");
+    autoSavePath = filePaths[0]; // Update auto-save path
     return JSON.parse(content);
   }
 });
 
-ipcMain.handle('load-settings', async (event) => {
-    const miniLoomSettingsFilePath = path.join(app.getPath("appData"),
-					      'miniloom',
-					      'settings.json');
-    let settings;
-    if (fs.existsSync(miniLoomSettingsFilePath)) {
-	settings = fs.readFileSync(miniLoomSettingsFilePath, 'utf8');
-	return JSON.parse(settings);
+ipcMain.handle("load-settings", async (event) => {
+  const miniLoomSettingsFilePath = path.join(
+    app.getPath("appData"),
+    "miniloom",
+    "settings.json"
+  );
+  let settings;
+  if (fs.existsSync(miniLoomSettingsFilePath)) {
+    settings = fs.readFileSync(miniLoomSettingsFilePath, "utf8");
+    return JSON.parse(settings);
+  }
+});
+
+ipcMain.handle("auto-save", (event, data) => {
+  const userFileData = {};
+  userFileData["loomTree"] = data["loomTree"];
+  userFileData["focus"] = data["focus"];
+  if (autoSavePath) {
+    fs.writeFileSync(autoSavePath, JSON.stringify(userFileData));
+  }
+
+  const appDataPath = app.getPath("appData");
+  const miniLoomSettings = data["samplerSettingsStore"];
+  const miniLoomSettingsDir = path.join(appDataPath, "miniloom");
+  const miniLoomSettingsFilePath = path.join(
+    miniLoomSettingsDir,
+    "settings.json"
+  );
+  if (!fs.existsSync(miniLoomSettingsDir)) {
+    fs.mkdirSync(miniLoomSettingsDir);
+  }
+  fs.writeFileSync(miniLoomSettingsFilePath, JSON.stringify(miniLoomSettings));
+});
+
+app
+  .whenReady()
+  .then(() => {
+    app.setName("MiniLoom");
+    if (process.platform === "darwin") {
+      app.dock.setIcon(path.join(__dirname, "assets/minihf_logo_no_text.png"));
     }
-});
-	
-ipcMain.handle('auto-save', (event, data) => {
-    const userFileData = {}
-    userFileData["loomTree"] = data["loomTree"];
-    userFileData["focus"] = data["focus"];
-    if (autoSavePath) {
-	fs.writeFileSync(autoSavePath, JSON.stringify(userFileData));
-    }
-    
-    const appDataPath = app.getPath("appData");
-    const miniLoomSettings = data["samplerSettingsStore"];
-    const miniLoomSettingsDir = path.join(appDataPath, 'miniloom');
-    const miniLoomSettingsFilePath = path.join(miniLoomSettingsDir, 'settings.json');
-    if (!fs.existsSync(miniLoomSettingsDir)) {
-	fs.mkdirSync(miniLoomSettingsDir);
-    }
-    fs.writeFileSync(miniLoomSettingsFilePath, JSON.stringify(miniLoomSettings));
+  })
+  .then(createWindow);
+
+app.on("window-all-closed", function () {
+  if (process.platform !== "darwin") app.quit();
 });
 
-
-app.whenReady().then(createWindow);
-
-app.on('window-all-closed', function () {
-    if (process.platform !== 'darwin') app.quit();
+app.on("activate", function () {
+  if (mainWindow === null) createWindow();
 });
 
-app.on('activate', function () {
-    if (mainWindow === null) createWindow();
-});
-
-ipcMain.on('show-context-menu', (event) => {
+ipcMain.on("show-context-menu", (event) => {
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Cut', role: 'cut' },
-    { label: 'Copy', role: 'copy' },
-    { label: 'Paste', role: 'paste' },
-    { type: 'separator' },
-    { label: 'Select All', role: 'selectAll' },
+    { label: "Cut", role: "cut" },
+    { label: "Copy", role: "copy" },
+    { label: "Paste", role: "paste" },
+    { type: "separator" },
+    { label: "Select All", role: "selectAll" },
   ]);
 
   contextMenu.popup(BrowserWindow.fromWebContents(event.sender));
