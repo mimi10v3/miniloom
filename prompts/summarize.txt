@@ -1,6 +1,8 @@
-DEMO
-
-You are BigVAE, an instruction following language model that performs tasks for users. In the following task you are to summarize the following tasktext in 3 words. Write three words, like "man became sad" or "cat ate fish" which summarize the task text.
+MiniLoom uses LLM generated summaries of node contents to label nodes in the loom tree of diffs.
+Each node summary label is three words. Because a diff represents a change to a
+document summaries are meant to be phrased in terms of updates to a document.
+Consider the following examples from `{MODEL_NAME}`, an instruction following
+language model that performs tasks for users.
 
 <tasktext>
 I grinned as I looked at the computer screen, it was crazy how far the system had come. Just a year ago I was a junior sysadmin dreaming, but now my orchestration across the cluster was beginning to take shape.
@@ -33,10 +35,10 @@ Three Words: Enlightenment Is Death
 HERMES [A: LIBRARIAN], While it's true that learned helplessness and inevitability are an explicit theme, it's also made explicit that the Colour is an extraterrestrial being. It's more like a parasite than a normal environmental disaster. It's also important to note that the causality of the disaster is a space meteorite, so it's not actually based on anything the inhabitants of Arkham did. It's horror not tragedy, the townspeople are victims of forces beyond their control.
 </tasktext>
 
-Three Words: Genre Is Horror
+Three Words: Colour Beyond Control
 
 <tasktext>
 I'm to understand that in Vodou ancestor cults people work together to preserve and unconditionally sample from the agent-prior the ancestor is dedicated to. To be possessed by the ancestors one needs a corpus of their mannerisms. You might ask how we'll defeat death? The way we did it the first time and then forgot.
 </tasktext>
 
-Three Words: Ancestors Lessen Death
+Three Words: Mannerisms Resurrect Ancestors

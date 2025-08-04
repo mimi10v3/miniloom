@@ -352,8 +352,8 @@ async function getResponses(
 async function getSummary(taskText) {
   const endpoint = document.getElementById("api-url").value;
   const summarizePromptPath = path.join(__dirname, "prompts", "summarize.txt");
-  const summarizePrompt = fs.readFileSync(summarizePromptPath, "utf8");
-
+  const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
+  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", document.getElementById("model-name").value);
   // Limit context to 8 * 512, where eight is the average number of letters in a word
   // and 512 is the number of words to summarize over
   // otherwise we eventually end up pushing the few shot prompt out of the context window
@@ -373,7 +373,7 @@ async function getSummary(taskText) {
         prompt: prompt,
         prompt_node: true,
         evaluationPrompt: "",
-        tokens_per_branch: 4,
+        tokens_per_branch: 10,
         output_branches: 1,
       }),
       headers: {
@@ -381,7 +381,8 @@ async function getSummary(taskText) {
       },
     });
     let batch = await r.json();
-    return batch[1]["text"].trim();
+    // Always get last three words
+    return batch[1]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
   else if (sampler.value == "openai-chat") {
@@ -390,7 +391,7 @@ async function getSummary(taskText) {
       body: JSON.stringify({
         messages: [{ role: "system", content: prompt }],
         model: document.getElementById("model-name").value,
-        max_tokens: 4,
+        max_tokens: 10,
         temperature: document.getElementById("temperature").value,
         top_p: document.getElementById("top-p").value,
         top_k: document.getElementById("top-k").value,
@@ -401,13 +402,13 @@ async function getSummary(taskText) {
       },
     });
     let batch = await r.json();
-    return batch.choices[0]["message"]["content"];
+    return batch.choices[0]["message"]["content"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   } else {
     const tp = {
       "api-key": document.getElementById("api-key").value,
       "output-branches": 1,
       "model-name": document.getElementById("model-name").value,
-      "tokens-per-branch": 4,
+      "tokens-per-branch": 10,
       temperature: document.getElementById("temperature").value,
       "top-p": document.getElementById("top-p").value,
       "top-k": document.getElementById("top-k").value,
@@ -428,7 +429,7 @@ async function getSummary(taskText) {
         togetherParams: tp,
       });
     }
-    return batch[0]["text"];
+    return batch[0]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   }
 }
 
