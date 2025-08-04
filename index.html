@@ -354,9 +354,9 @@
         opacity: 0.7;
       }
 
-      #focused-node > a {
+      #loom-tree-view #focused-node > a {
         background: rgba(213, 4, 2, 0.1);
-        color: var(--barn-red) !important; /* Only active node gets color */
+        /* color: var(--barn-red) !important; Only active node gets color */
         font-weight: 600;
         box-shadow: inset 4px 0 0 var(--engineering-orange);
         padding-left: 12px;
@@ -386,8 +386,7 @@
       }
 
       .unread-tree-node > a {
-        font-style: italic;
-        font-weight: 500;
+        font-weight: bold;
       }
 
       .unread-tree-node > a::before {
