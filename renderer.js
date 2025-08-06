@@ -971,7 +971,8 @@ editor.addEventListener("keydown", async (e) => {
   // Autosave users work when writing next prompt
   if (
     focus.children.length > 0 ||
-    ["gen", "rewrite", "root"].includes(focus.type)
+    ["gen", "rewrite", "root"].includes(focus.type) &&
+    !["Shift", "Control", "Meta", "Alt"].includes(e.key) 
   ) {
     const child = loomTree.createNode("user", focus, prompt, "New Node");
     changeFocus(child.id);
