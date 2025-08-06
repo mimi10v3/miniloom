@@ -964,20 +964,23 @@ function updateCounterDisplay(text) {
 
 var secondsSinceLastTyped = 0;
 var updatingNode = false;
-editor.addEventListener("keydown", async (e) => {
-  secondsSinceLastTyped = 0;
-  const prompt = editor.value;
 
+editor.addEventListener("input", async (e) => {
+  const prompt = editor.value;
   // Autosave users work when writing next prompt
   if (
     focus.children.length > 0 ||
-    ["gen", "rewrite", "root"].includes(focus.type) &&
-    !["Shift", "Control", "Meta", "Alt"].includes(e.key) &&
-    ![e.shiftKey, e.ctrlKey, e.metaKey, e.altKey].includes(true) 
+    ["gen", "rewrite", "root"].includes(focus.type)
   ) {
     const child = loomTree.createNode("user", focus, prompt, "New Node");
     changeFocus(child.id);
   }
+});
+
+editor.addEventListener("keydown", async (e) => {
+  secondsSinceLastTyped = 0;
+  const prompt = editor.value;
+
   if (focus.children.length == 0 && focus.type == "user" && !updatingNode) {
     updatingNode = true;
     loomTree.updateNode(focus, prompt, focus.summary);
