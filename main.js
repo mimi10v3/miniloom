@@ -79,6 +79,28 @@ function createWindow() {
   });
 }
 
+// Listen for open-settings request
+ipcMain.handle('open-settings', () => {
+  const modal = new BrowserWindow({
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    width: 400,
+    height: 300,
+    webPreferences: {
+      preload: __dirname + '/preload.js', // optional
+    }
+  });
+
+  modal.loadFile('settings.html');
+  modal.once('ready-to-show', () => modal.show());
+
+  modal.on('closed', () => {
+    // Inform the main window to refresh its UI
+    mainWindow.webContents.send('settings-updated');
+  });
+});
+
 let autoSavePath = null;
 
 ipcMain.handle("save-file", async (event, data) => {
