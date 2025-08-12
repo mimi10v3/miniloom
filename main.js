@@ -15,8 +15,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     title: "MiniLoom",
     icon: path.join(__dirname, "assets/minihf_logo_no_text.png"),
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 850,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -33,6 +33,13 @@ function createWindow() {
 
   // Define new items for the File menu
   const fileMenuItems = [
+    {
+      label: "New",
+      accelerator: "CmdOrCtrl+N",
+      click() {
+        mainWindow.webContents.send("invoke-action", "new-file");
+      },
+    },
     {
       label: "Save",
       accelerator: "CmdOrCtrl+S",
@@ -96,6 +103,16 @@ ipcMain.handle("save-file", async (event, data) => {
 
   if (filePath) {
     fs.writeFileSync(filePath, JSON.stringify(data));
+    // Send the filename, creation time, and full path to the renderer
+    const filename = path.basename(filePath, ".json"); // Remove .json extension
+    const stats = fs.statSync(filePath);
+    const creationTime = stats.birthtime;
+    mainWindow.webContents.send(
+      "update-filename",
+      filename,
+      creationTime,
+      filePath
+    );
   }
 });
 
@@ -109,8 +126,23 @@ ipcMain.handle("load-file", async (event) => {
   if (filePaths && filePaths.length > 0) {
     const content = fs.readFileSync(filePaths[0], "utf8");
     autoSavePath = filePaths[0]; // Update auto-save path
+    // Send the filename, creation time, and full path to the renderer
+    const filename = path.basename(filePaths[0], ".json"); // Remove .json extension
+    const stats = fs.statSync(filePaths[0]);
+    const creationTime = stats.birthtime;
+    mainWindow.webContents.send(
+      "update-filename",
+      filename,
+      creationTime,
+      filePaths[0]
+    );
     return JSON.parse(content);
   }
+});
+
+ipcMain.handle("new-file", async (event) => {
+  // check if current file is saved
+  // reset to fresh temp file
 });
 
 ipcMain.handle("load-settings", async (event) => {

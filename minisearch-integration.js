@@ -292,6 +292,11 @@ LoomTree.prototype.createNode = function (type, parent, text, summary) {
     addNodeToSearchIndex(node);
   }
 
+  // Update tree stats when a new node is created
+  if (typeof updateTreeStats === "function") {
+    updateTreeStats();
+  }
+
   return node;
 };
 
@@ -303,6 +308,11 @@ LoomTree.prototype.updateNode = function (node, text, summary) {
   // Update in search index - MiniSearch makes this easy
   if (searchIndex) {
     updateNodeInSearchIndex(node);
+  }
+
+  // Update tree stats when a node is updated
+  if (typeof updateTreeStats === "function") {
+    updateTreeStats();
   }
 };
 
@@ -576,7 +586,7 @@ window.renderTick = function () {
   }
   const quickRollSpan = document.createElement("span");
   quickRollSpan.classList.add("reroll");
-  quickRollSpan.textContent = "🖋️";
+  quickRollSpan.innerHTML = "🖋️ <span>Generate</span>";
   quickRollSpan.onclick = () => reroll(focus.id, false);
   branchControlButtonsDiv.append(quickRollSpan);
 

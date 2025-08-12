@@ -17,6 +17,12 @@
       body {
         font-family: sans-serif;
         display: flex;
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        min-width: 800px;
+        overflow-x: auto;
+        overflow-y: auto;
       }
 
       input {
@@ -38,19 +44,24 @@
       }
 
       #settings-pane {
-        width: 25%;
+        width: 200px;
+        min-width: 200px;
+        background-color: #f8f9fa;
+        border-right: 1px solid #e9ecef;
+        padding: 16px;
+        overflow-y: auto;
       }
 
       #settings-pane form {
         display: flex;
         flex-direction: column;
-        width: 200px;
+        width: 100%;
       }
 
       #sampler-option-menu {
         display: flex;
         flex-direction: column;
-        width: 200px;
+        width: 100%;
       }
 
       #sampler-option-menu label {
@@ -75,19 +86,117 @@
         margin-bottom: 5px;
       }
 
+      .main-content {
+        display: flex;
+        flex: 1;
+        min-width: 600px;
+        overflow: hidden;
+      }
+
+      #nav-pane {
+        width: 25%;
+        min-width: 150px;
+        max-width: 350px;
+        background-color: #f8f9fa;
+        border-left: 1px solid #e9ecef;
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      /* Override injected styles from minisearch-integration.js */
+      #tree-container {
+        width: 100% !important;
+        margin-left: 0 !important;
+        margin-top: 0 !important;
+      }
+
+      #loom-tree-view {
+        margin-left: 0 !important;
+        width: 100% !important;
+      }
+
       #narrative-pane {
-        height: 100%;
-        width: 600px;
-        margin-left: 2em;
+        flex: 1;
+        min-width: 400px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #top-bar {
+        border-bottom: 1px solid #e9ecef;
+        padding: 6px 16px;
+        min-height: 36px;
+        display: flex;
+        align-items: center;
+        background-color: white;
+      }
+
+      .top-bar-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+
+      .logo-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .app-logo {
+        width: 24px;
+        height: 24px;
+        object-fit: contain;
+      }
+
+      .app-title {
+        font-weight: 600;
+        font-size: 16px;
+        color: #333;
+      }
+
+      .file-info {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 14px;
+        color: #666;
+      }
+
+      .tree-stats {
+        font-size: 12px;
+        color: #777;
+        margin-left: 12px;
+        display: flex;
+        align-items: baseline;
+        line-height: 1;
+      }
+
+      #current-filename {
+        font-weight: 500;
+      }
+
+      .unsaved-dot {
+        color: #dc3545;
+        font-weight: bold;
+        font-size: 18px;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
       }
 
       #context {
-        width: 800px;
-        height: 100%;
+        flex: 1;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        padding: 1rem;
+        padding: 12px;
+        overflow: hidden;
       }
 
       .response {
@@ -105,10 +214,29 @@
       }
 
       .reroll {
+        background-color: var(--engineering-orange);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 0 12px;
         font-size: 1.3em;
+        font-weight: normal;
         cursor: pointer;
-        height: 25px;
-        padding-left: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: background-color 0.2s;
+        height: 36px;
+        margin-right: 8px;
+        box-sizing: border-box;
+      }
+
+      .reroll:hover {
+        background-color: var(--barn-red);
+      }
+
+      .reroll span {
+        font-size: 0.8em;
       }
 
       #rewrite-button {
@@ -130,18 +258,42 @@
       .thumbs {
         font-size: 1.3em;
         cursor: pointer;
-        height: 25px;
-        opacity: 0.3;
-        transition: opacity 0.3s;
+        height: 36px;
+        width: 36px;
+        border-radius: 8px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.7;
+        transition: all 0.2s;
+        margin-right: 4px;
+        box-sizing: border-box;
       }
 
       .thumbs:hover {
         opacity: 1;
+        background-color: #0056b3;
       }
 
       .chosen {
         font-size: 1.3em;
+        cursor: pointer;
+        height: 36px;
+        width: 36px;
+        border-radius: 8px;
+        background-color: #0056b3;
+        color: white;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         opacity: 1;
+        transition: all 0.2s;
+        margin-right: 4px;
+        box-sizing: border-box;
       }
 
       .branch-controls {
@@ -164,27 +316,31 @@
 
       #prompt-branch-controls {
         margin-top: initial;
-        margin-left: 1em;
+        margin-left: auto;
       }
 
       #controls {
         background-color: white;
-        justify-content: center;
-        width: 600px;
-        bottom: 0;
+        border-top: 1px solid #e9ecef;
+        padding: 6px 16px;
+        height: 48px;
         display: flex;
         flex-direction: row;
+        align-items: center;
+        flex-shrink: 0;
       }
 
       #controls-form {
-        width: 600px;
+        flex: 1;
+        display: flex;
+        align-items: center;
       }
 
       #buttons {
-        margin-top: 1px;
-        margin-bottom: 1em;
         display: flex;
         flex-direction: row;
+        align-items: center;
+        gap: 8px;
       }
 
       #buttons #session-buttons {
@@ -194,13 +350,16 @@
       #editor {
         border: none;
         outline: none;
-        height: 800px;
-        width: 600px;
+        flex: 1;
+        width: 100%;
         overflow-y: auto;
         box-shadow: 0 0 5px rgba(0, 0, 0, 0.4);
-        padding: 5px;
+        padding: 12px;
         box-sizing: border-box;
         resize: none;
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1.5;
       }
 
       .user-prompt {
@@ -208,14 +367,14 @@
       }
 
       #die {
-        height: 35px;
-        width: 50px;
-        font-size: 30px;
-        display: inline-block;
+        height: 32px;
+        width: 40px;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         transform-origin: center center;
         animation: spin 0.4s linear infinite;
-        text-align: center; /* Center the character horizontally */
-        line-height: 35px; /* Center the character vertically */
       }
 
       @keyframes spin {
@@ -227,12 +386,36 @@
         }
       }
       #batch-item-index {
-        margin-left: 0.5em;
-        align-self: center;
+        font-size: 14px;
+        font-weight: 500;
+        color: #666;
+        margin-left: 8px;
       }
 
       #prompt-token-counter {
         margin-left: auto;
+        font-size: 14px;
+        font-weight: 500;
+        color: #666;
+      }
+
+      #errors {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        padding: 8px 16px;
+        margin: 8px 16px;
+        border-radius: 4px;
+        display: none;
+      }
+
+      #errors.show {
+        display: block;
+      }
+
+      #error-message {
+        margin: 0;
+        color: #856404;
+        font-size: 14px;
       }
 
       .over-token-limit {
@@ -363,9 +546,9 @@
       }
 
       .parent-of-focused > a {
-        background: rgba(213, 4, 2, 0.04);
+        background: rgba(213, 4, 2, 0.15);
         font-weight: 500;
-        box-shadow: inset 2px 0 0 rgba(213, 4, 2, 0.3);
+        box-shadow: inset 2px 0 0 rgba(213, 4, 2, 0.5);
         padding-left: 10px;
       }
 
@@ -391,7 +574,7 @@
 
       .unread-tree-node > a::before {
         content: '● ';
-        color: #7bb3f0;
+        color: #0056b3;
         font-size: 0.7em;
         display: inline;
         margin-right: 2px;
@@ -480,7 +663,7 @@
       .search-suggestion {
         padding: 8px;
         cursor: pointer;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid #e9ecef;
         transition: background-color 0.2s;
       }
 
@@ -516,7 +699,21 @@
         <div id="sampler-option-menu"></div>
       </form>
     </div>
-    <div id="narrative-pane">
+    <div class="main-content">
+      <div id="narrative-pane">
+      <div id="top-bar">
+        <div class="top-bar-content">
+          <div class="logo-title">
+            <img src="assets/minihf_logo_no_text.png" alt="MiniHF Logo" class="app-logo">
+            <span class="app-title">MiniHF MiniLoom</span>
+          </div>
+          <div class="file-info">
+            <span id="current-filename">Untitled</span>
+            <span id="unsaved-indicator" class="unsaved-dot" style="display: none;">•</span>
+            <div id="tree-stats" class="tree-stats"></div>
+          </div>
+        </div>
+      </div>
       <div id="context">
         <textarea id="editor" placeholder="Your prompt goes here."></textarea>
       </div>
@@ -535,9 +732,10 @@
         <p id="error-message"></p>
       </div>
     </div>
-
-    <!-- Original tree view structure -->
-    <div id="loom-tree-view"></div>
+      <div id="nav-pane">
+        <div id="loom-tree-view"></div>
+      </div>
+    </div>
 
     
     <div id="right-panes" style="display:none;"">

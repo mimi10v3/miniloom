@@ -260,7 +260,7 @@ function renderTick() {
   }
   const quickRollSpan = document.createElement("span");
   quickRollSpan.classList.add("reroll");
-  quickRollSpan.textContent = "🖋️";
+  quickRollSpan.innerHTML = "🖋️ <span>Generate</span>";
   quickRollSpan.onclick = () => reroll(focus.id, false);
   branchControlButtonsDiv.append(quickRollSpan);
 
@@ -1063,6 +1063,8 @@ function loadFile() {
       loomTree = Object.assign(new LoomTree(), loomTreeRaw);
       focus = loomTree.nodeStore[data.focus.id];
       renderTick();
+      // Update tree stats after loading
+      updateTreeStats();
     })
     .catch((err) => console.error("Load File Error:", err));
 }
@@ -1131,6 +1133,106 @@ ipcRenderer.on("invoke-action", (event, action) => {
     default:
       console.log("Action not recognized", action);
   }
+});
+
+// Handle filename updates from main process
+ipcRenderer.on("update-filename", (event, filename, creationTime, filePath) => {
+  const filenameElement = document.getElementById("current-filename");
+  if (filenameElement) {
+    filenameElement.innerHTML = `💾 ${filename}`;
+
+    // Get tree stats for last modified time
+    const stats = calculateTreeStats();
+    const lastModified = stats.lastNodeCreationTime
+      ? stats.lastNodeCreationTime.toLocaleString()
+      : "N/A";
+
+    if (creationTime) {
+      const formattedTime = new Date(creationTime).toLocaleString();
+      filenameElement.title = `File: ${filePath || "Unknown"}
+Created: ${formattedTime}
+Last Modified: ${lastModified}`;
+    } else {
+      filenameElement.title = `File: ${filePath || "Unknown"}
+Last Modified: ${lastModified}`;
+    }
+  }
+});
+
+// Function to reset filename to Untitled
+function resetFilename() {
+  const filenameElement = document.getElementById("current-filename");
+  if (filenameElement) {
+    filenameElement.innerHTML = "💾 Untitled";
+    filenameElement.title = "";
+  }
+}
+
+// Function to calculate tree statistics
+function calculateTreeStats() {
+  let totalNodes = 0;
+  let maxDepth = 0;
+  let maxWordCount = 0;
+  let lastNodeCreationTime = 0;
+
+  function traverseNode(node, depth = 0) {
+    totalNodes++;
+    maxDepth = Math.max(maxDepth, depth);
+
+    // Calculate word count for this node
+    const nodeText = loomTree.renderNode(node);
+    const wordCount = nodeText
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0).length;
+    maxWordCount = Math.max(maxWordCount, wordCount);
+
+    // Track latest creation time
+    lastNodeCreationTime = Math.max(lastNodeCreationTime, node.timestamp);
+
+    // Traverse children
+    for (const childId of node.children) {
+      const childNode = loomTree.nodeStore[childId];
+      if (childNode) {
+        traverseNode(childNode, depth + 1);
+      }
+    }
+  }
+
+  // Start traversal from root
+  traverseNode(loomTree.root);
+
+  return {
+    totalNodes,
+    maxDepth,
+    maxWordCount,
+    lastNodeCreationTime:
+      lastNodeCreationTime > 0 ? new Date(lastNodeCreationTime) : null,
+  };
+}
+
+// Function to update tree statistics display
+function updateTreeStats() {
+  const stats = calculateTreeStats();
+  const statsElement = document.getElementById("tree-stats");
+
+  if (statsElement) {
+    // Show only the most useful info on screen
+    statsElement.innerHTML = `<span>${stats.totalNodes} nodes</span>`;
+
+    // Put detailed stats in hover tooltip
+    statsElement.title = `Tree Statistics:
+• Total Nodes: ${stats.totalNodes}
+• Maximum Depth: ${stats.maxDepth}
+• Longest Node: ${stats.maxWordCount} words`;
+  }
+}
+
+// Initialize filename to Untitled when page loads
+document.addEventListener("DOMContentLoaded", function () {
+  resetFilename();
+  // Initialize tree stats
+  updateTreeStats();
 });
 
 function baseSamplerMenu() {
