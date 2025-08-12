@@ -14,19 +14,59 @@
         width: 200px;
       }
 
-      #sampler-option-menu {
+      #menu-host {
         display: flex;
         flex-direction: column;
         width: 200px;
       }
 
-      #sampler-option-menu label {
+      #menu-host label {
         margin-top: 1em;
         margin-bottom: 5px;
       }
+
+      #settings-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid rgba(0,0,0,.15);
+        margin-bottom: 10px;
+      }
+
+      #settings-tabs .tab-btn {
+        appearance: none;
+	border: none;
+	background: transparent;
+	padding: 8px 12px;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	font-weight: 600;
+      }
+
+      #settings-tabs .tab-btn.active {
+	border-color: #007aff;
+	color: #007aff;
+      }
+
+      /* Small table-ish layout helpers */
+      .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+      .row label { min-width: 160px; }
+      .divider { height: 1px; background: rgba(0,0,0,.08); margin: 12px 0; }
+      .btn {
+	appearance: none; border: 1px solid rgba(0,0,0,.2);
+	padding: 6px 10px; border-radius: 6px; cursor: pointer; background: #fff;
+      }
+      .btn.primary { background: #007aff; color: white; border-color: #007aff; }
+      .muted { opacity: .7; font-size: .9em; }
+      table.keys { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      table.keys th, table.keys td { border-bottom: 1px solid rgba(0,0,0,.08); padding: 8px; text-align: left; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
     </style>
   </head>
   <body>
+    <div id="settings-tabs">
+      <button class="tab-btn active" data-tab="sampler-settings">Sampler Settings</button>
+      <button class="tab-btn" data-tab="api-keys">API Keys</button>
+    </div>
     <div id="settings-pane">
     <form id="sampler-settings">
       <p>Sampler Settings</p>
@@ -36,13 +76,8 @@
         <option value="openai-chat">OpenAI Chat Completions</option>
         <option value="openrouter">OpenRouter API</option>
         <option value="together">Together API</option>
-        <option value="base">Base Model</option>
-        <option value="vae-base">Unguided VAE</option>
-        <option value="vae-guided">Guided VAE</option>
-        <option value="vae-paragraph">VAE Paragraph</option>
-        <option value="vae-bridge">VAE Bridge</option>
       </select>
-      <div id="sampler-option-menu"></div>
+      <div id="menu-host"></div>
     </form>
     <script src="sampler-settings.js"></script>
     </div>

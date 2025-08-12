@@ -1,6 +1,7 @@
 // TODO: Use a preload
 const { ipcRenderer } = require("electron");
-const samplerOptionMenu = document.getElementById("sampler-option-menu");
+const samplerOptionMenu = document.getElementById("menu-host");
+const menuHost = samplerOptionMenu;
 let samplerSettingsStore = {};
 
 function baseSamplerMenu() {
@@ -304,38 +305,18 @@ function internalSaveSamplerSettings() {
     samplerSettingsStore["sampler-settings"][settingsName] = samplerMenuToDict();
   }
   console.log(samplerSettingsStore);
-  //TODO: Remove temporary autosave
   ipcRenderer
     .invoke("save-settings", samplerSettingsStore)
     .catch((err) => console.error("Settings save Error:", err));
 }
 
-samplerOptionMenu.addEventListener("change", internalSaveSamplerSettings);
-sampler.addEventListener("focus", internalSaveSamplerSettings);
+// samplerOptionMenu.addEventListener("change", internalSaveSamplerSettings);
+// sampler.addEventListener("focus", internalSaveSamplerSettings);
 
-sampler.addEventListener("change", function () {
-  let selectedSampler = this.value;
-  if (selectedSampler === "base") {
-    baseSamplerMenu();
-  } else if (selectedSampler === "together") {
-    togetherSamplerMenu();
-  } else if (selectedSampler === "openrouter") {
-    openrouterSamplerMenu();
-  } else if (selectedSampler === "openai") {
-    openaiCompletionsSamplerMenu();
-  } else if (selectedSampler === "openai-chat") {
-    openaiChatCompletionsSamplerMenu();
-    // Initialize with default chat JSON if editor is empty or not valid JSON
-    if (!editor.value.trim() || !isValidChatJson(editor.value)) {
-      editor.value = createDefaultChatJson();
-      updateCounterDisplay(editor.value);
-    }
+sampler?.addEventListener("change", function () {
+  if (activeTab === "sampler-settings") {
+    renderSamplerSettingsTab();
   }
-  if ("sampler-settings" in samplerSettingsStore &&
-      "Default" in samplerSettingsStore["sampler-settings"]) {
-      loadSamplerMenuDict(samplerSettingsStore["sampler-settings"]["Default"]);
-    }
-
 });
 
 function loadSettings() {
@@ -349,7 +330,246 @@ function loadSettings() {
     .catch((err) => console.error("Load Settings Error:", err));
 }
 
-openaiCompletionsSamplerMenu();
+
+
+// ---------- Tab 1: Sampler Settings ----------
+function renderSamplerSettingsTab() {
+  // Draw the sampler form using your existing per-sampler builders.
+  menuHost.innerHTML = "";
+
+  // Use whatever sampler is currently selected
+  const selected = sampler?.value || "openai";
+  if (selected === "base") baseSamplerMenu();
+  else if (selected === "together") togetherSamplerMenu();
+  else if (selected === "openrouter") openrouterSamplerMenu();
+  else if (selected === "openai") openaiCompletionsSamplerMenu();
+  else if (selected === "openai-chat") {
+    openaiChatCompletionsSamplerMenu();
+    // Guard optional editor helpers if present
+    if (typeof editor !== "undefined" && typeof isValidChatJson === "function") {
+      if (!editor.value?.trim() || !isValidChatJson(editor.value)) {
+        editor.value = createDefaultChatJson();
+        if (typeof updateCounterDisplay === "function") updateCounterDisplay(editor.value);
+      }
+    }
+  } else {
+    // Fallback to base
+    baseSamplerMenu();
+  }
+
+  // Divider + explicit SAVE UI (no more forced "Default" load)
+  const divider = document.createElement("div");
+  divider.className = "divider";
+  menuHost.appendChild(divider);
+
+  // Save row: use your existing #setting-settings-name as the preset name
+  const saveRow = document.createElement("div");
+  saveRow.className = "row";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.className = "btn primary";
+  saveBtn.textContent = "Save preset";
+  saveBtn.title = "Save sampler settings under this name";
+  saveBtn.addEventListener("click", () => {
+    try {
+      internalSaveSamplerSettings();
+      flashSaved("Preset saved.");
+    } catch (e) {
+      console.error(e);
+      flashSaved("Failed to save preset (see console).", true);
+    }
+  });
+
+  const hint = document.createElement("span");
+  hint.className = "muted";
+  hint.textContent = "Tip: change “Settings Name” above, then click Save.";
+
+  saveRow.appendChild(saveBtn);
+  saveRow.appendChild(hint);
+  menuHost.appendChild(saveRow);
+}
+
+function flashSaved(msg, isError = false) {
+  const note = document.createElement("div");
+  note.textContent = msg;
+  note.style.marginTop = "8px";
+  note.style.fontWeight = "600";
+  note.style.color = isError ? "#b00020" : "#0a7d06";
+  const pane = document.getElementById("settings-pane");
+  pane.appendChild(note);
+  setTimeout(() => note.remove(), 1800);
+}
+
+
+
+// ---------- Tab 2: API Keys ----------
+/**
+ * Store shape:
+ * samplerSettingsStore["api-keys"] = {
+ *   "OPENAI": "sk-...",
+ *   "TOGETHER": "tkn-..."
+ * }
+ */
+function getApiKeysObject() {
+  if (!samplerSettingsStore["api-keys"]) {
+    samplerSettingsStore["api-keys"] = {};
+  }
+  return samplerSettingsStore["api-keys"];
+}
+
+function persistStore() {
+  return ipcRenderer
+    .invoke("save-settings", samplerSettingsStore)
+    .catch((err) => console.error("Settings save Error:", err));
+}
+
+function renderApiKeysTab() {
+  menuHost.innerHTML = "";
+
+  // Add Key form
+  const addForm = document.createElement("div");
+  addForm.className = "row";
+  addForm.innerHTML = `
+    <label for="key-label">Key Name</label>
+    <input type="text" id="key-label" class="modelNameType" placeholder="e.g. OPENAI" />
+    <label for="key-value" style="margin-left:12px;">Secret</label>
+    <input type="password" id="key-value" placeholder="paste your API key" />
+    <button class="btn primary" id="add-key-btn">Add</button>
+  `;
+  menuHost.appendChild(addForm);
+
+  const warn = document.createElement("div");
+  warn.className = "muted";
+  warn.style.marginTop = "6px";
+  warn.textContent = "Names allow A–Z, a–z, 0–9, dash, underscore, and dot.";
+  menuHost.appendChild(warn);
+
+  const divider = document.createElement("div");
+  divider.className = "divider";
+  menuHost.appendChild(divider);
+
+  // Keys table
+  const table = document.createElement("table");
+  table.className = "keys mono";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th style="width:22%;">Name</th>
+        <th>Secret</th>
+        <th style="width:150px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="keys-tbody"></tbody>
+  `;
+  menuHost.appendChild(table);
+
+  // Render rows
+  function refreshKeysTable() {
+    const tbody = table.querySelector("#keys-tbody");
+    tbody.innerHTML = "";
+    const obj = getApiKeysObject();
+    const entries = Object.entries(obj);
+    if (entries.length === 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 3;
+      td.className = "muted";
+      td.textContent = "No API keys saved.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    for (const [name, secret] of entries) {
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td");
+      tdName.textContent = name;
+
+      const tdSecret = document.createElement("td");
+      const mask = document.createElement("span");
+      mask.textContent = "•".repeat(Math.min(secret?.length || 0, 12)) || "—";
+      mask.dataset.revealed = "0";
+      tdSecret.appendChild(mask);
+
+      const tdActions = document.createElement("td");
+      const showBtn = document.createElement("button");
+      showBtn.className = "btn";
+      showBtn.textContent = "Show";
+      showBtn.addEventListener("click", () => {
+        const revealed = mask.dataset.revealed === "1";
+        mask.textContent = revealed ? "•".repeat(Math.min(secret?.length || 0, 12)) : (secret || "");
+        mask.dataset.revealed = revealed ? "0" : "1";
+        showBtn.textContent = revealed ? "Show" : "Hide";
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn";
+      delBtn.style.marginLeft = "6px";
+      delBtn.textContent = "Delete";
+      delBtn.addEventListener("click", async () => {
+        const obj = getApiKeysObject();
+        delete obj[name];
+        await persistStore();
+        refreshKeysTable();
+      });
+
+      tdActions.appendChild(showBtn);
+      tdActions.appendChild(delBtn);
+
+      tr.appendChild(tdName);
+      tr.appendChild(tdSecret);
+      tr.appendChild(tdActions);
+      tbody.appendChild(tr);
+    }
+  }
+
+  // Add key handler
+  addForm.querySelector("#add-key-btn").addEventListener("click", async () => {
+    const nameEl = addForm.querySelector("#key-label");
+    const valEl = addForm.querySelector("#key-value");
+    const name = nameEl.value.trim();
+    const value = valEl.value;
+
+    // Reuse your validator
+    if (!validateFieldStringType(name, "modelNameType")) {
+      alert("Invalid key name. Use letters, digits, '-', '_', or '.'.");
+      return;
+    }
+    if (!value) {
+      alert("Secret cannot be empty.");
+      return;
+    }
+
+    const obj = getApiKeysObject();
+    obj[name] = value;
+    await persistStore();
+    nameEl.value = "";
+    valEl.value = "";
+    refreshKeysTable();
+  });
+
+  refreshKeysTable();
+}
+
+function setActiveTab(tabName) {
+  activeTab = tabName;
+  for (const b of document.querySelectorAll("#settings-tabs .tab-btn")) {
+    b.classList.toggle("active", b.dataset.tab === activeTab);
+  }
+  if (activeTab === "sampler-settings") {
+    renderSamplerSettingsTab();
+  } else {
+    renderApiKeysTab();
+  }
+}
+
+const tabs = document.getElementById("settings-tabs");
+tabs.addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab-btn");
+  if (!btn) return;
+  setActiveTab(btn.dataset.tab);
+});
+
+renderSamplerSettingsTab();
 loadSettings().then(() => {
   if ("sampler-settings" in samplerSettingsStore &&
       "Default" in samplerSettingsStore["sampler-settings"]) {
