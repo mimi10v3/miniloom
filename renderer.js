@@ -353,7 +353,10 @@ async function getSummary(taskText) {
   const endpoint = document.getElementById("api-url").value;
   const summarizePromptPath = path.join(__dirname, "prompts", "summarize.txt");
   const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
-  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", document.getElementById("model-name").value);
+  const summarizePrompt = summarizePromptTemplate.replace(
+    "{MODEL_NAME}",
+    document.getElementById("model-name").value
+  );
   // Limit context to 8 * 512, where eight is the average number of letters in a word
   // and 512 is the number of words to summarize over
   // otherwise we eventually end up pushing the few shot prompt out of the context window
@@ -382,7 +385,12 @@ async function getSummary(taskText) {
     });
     let batch = await r.json();
     // Always get last three words
-    return batch[1]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
+    return batch[1]["text"]
+      .trim()
+      .split("\n")[0]
+      .split(" ")
+      .slice(0, 3)
+      .join(" ");
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
   else if (sampler.value == "openai-chat") {
@@ -402,7 +410,12 @@ async function getSummary(taskText) {
       },
     });
     let batch = await r.json();
-    return batch.choices[0]["message"]["content"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
+    return batch.choices[0]["message"]["content"]
+      .trim()
+      .split("\n")[0]
+      .split(" ")
+      .slice(0, 3)
+      .join(" ");
   } else {
     const tp = {
       "api-key": document.getElementById("api-key").value,
@@ -429,7 +442,12 @@ async function getSummary(taskText) {
         togetherParams: tp,
       });
     }
-    return batch[0]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
+    return batch[0]["text"]
+      .trim()
+      .split("\n")[0]
+      .split(" ")
+      .slice(0, 3)
+      .join(" ");
   }
 }
 
@@ -987,45 +1005,44 @@ editor.addEventListener("keydown", async (e) => {
     updatingNode = false;
   }
 
-  if (e.key != "Enter") {
-    // Update character/word count on every keystroke
-    updateCounterDisplay(prompt);
+  // Update character/word count on every keystroke
+  updateCounterDisplay(prompt);
 
-    if (prompt.length % 32 == 0) {
-      // Removed the fetch call to check-tokens endpoint
+  if (prompt.length % 32 == 0) {
+    // Removed the fetch call to check-tokens endpoint
 
-      // Update summary while user is writing next prompt
-      if (
-        focus.children.length == 0 &&
-        focus.type == "user" &&
-        [
-          "base",
-          "vae-base",
-          "vae-guided",
-          "vae-paragraph",
-          "vae-bridge",
-        ].includes(sampler.value) &&
-        !updatingNode
-      ) {
-        try {
-          updatingNode = true;
-          const summary = await getSummary(prompt);
-          loomTree.updateNode(focus, prompt, summary);
-          updatingNode = false;
-        } catch (error) {
-          console.log(error);
-          updatingNode = false;
-        }
+    // Update summary while user is writing next prompt
+    if (
+      focus.children.length == 0 &&
+      focus.type == "user" &&
+      [
+        "base",
+        "vae-base",
+        "vae-guided",
+        "vae-paragraph",
+        "vae-bridge",
+      ].includes(sampler.value) &&
+      !updatingNode
+    ) {
+      try {
+        updatingNode = true;
+        const summary = await getSummary(prompt);
+        loomTree.updateNode(focus, prompt, summary);
+        updatingNode = false;
+      } catch (error) {
+        console.log(error);
+        updatingNode = false;
       }
-      // Render only the loom tree so we don't interrupt their typing
-      loomTreeView.innerHTML = "";
-      renderTree(focus, loomTreeView);
     }
-    return null;
-  } else if (!e.shiftKey) {
-    return null;
+    // Render only the loom tree so we don't interrupt their typing
+    loomTreeView.innerHTML = "";
+    renderTree(focus, loomTreeView);
   }
-  reroll(focus.id, settingUseWeave.checked);
+
+  // Check for Control+Enter or Command+Enter (Mac)
+  if (e.key == "Enter" && (e.ctrlKey || e.metaKey)) {
+    reroll(focus.id, settingUseWeave.checked);
+  }
 });
 
 function saveFile() {
