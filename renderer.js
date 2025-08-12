@@ -189,7 +189,6 @@ function createTreeLi(node, index, isMaxDepth, parentIds) {
 var loomTree = new LoomTree();
 const loomTreeView = document.getElementById("loom-tree-view");
 let focus = loomTree.nodeStore["1"];
-let samplerSettingsStore = {};
 renderTree(loomTree.root, loomTreeView);
 
 function renderTick() {

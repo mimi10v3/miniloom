@@ -88,7 +88,8 @@ ipcMain.handle('open-settings', () => {
     width: 400,
     height: 300,
     webPreferences: {
-      preload: __dirname + '/preload.js', // optional
+      nodeIntegration: true,
+      contextIsolation: false,
     }
   });
 
@@ -148,6 +149,7 @@ ipcMain.handle("load-settings", async (event) => {
   }
 });
 
+// Change this so it no longer saves settings
 ipcMain.handle("auto-save", (event, data) => {
   const userFileData = {};
   userFileData["loomTree"] = data["loomTree"];
@@ -155,9 +157,10 @@ ipcMain.handle("auto-save", (event, data) => {
   if (autoSavePath) {
     fs.writeFileSync(autoSavePath, JSON.stringify(userFileData));
   }
+});
 
+ipcMain.handle("save-settings", (event, miniLoomSettings) => {
   const appDataPath = app.getPath("appData");
-  const miniLoomSettings = data["samplerSettingsStore"];
   const miniLoomSettingsDir = path.join(appDataPath, "miniloom");
   const miniLoomSettingsFilePath = path.join(
     miniLoomSettingsDir,

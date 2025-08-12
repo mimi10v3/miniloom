@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sampler Settings</title>
+    <style>
+      #settings-pane {
+        width: 25%;
+      }
+
+      #settings-pane form {
+        display: flex;
+        flex-direction: column;
+        width: 200px;
+      }
+
+      #sampler-option-menu {
+        display: flex;
+        flex-direction: column;
+        width: 200px;
+      }
+
+      #sampler-option-menu label {
+        margin-top: 1em;
+        margin-bottom: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="settings-pane">
+    <form id="sampler-settings">
+      <p>Sampler Settings</p>
+      <label for="sampler">Sampling Method</label>
+      <select id="sampler">
+        <option value="openai">OpenAI Completions</option>
+        <option value="openai-chat">OpenAI Chat Completions</option>
+        <option value="openrouter">OpenRouter API</option>
+        <option value="together">Together API</option>
+        <option value="base">Base Model</option>
+        <option value="vae-base">Unguided VAE</option>
+        <option value="vae-guided">Guided VAE</option>
+        <option value="vae-paragraph">VAE Paragraph</option>
+        <option value="vae-bridge">VAE Bridge</option>
+      </select>
+      <div id="sampler-option-menu"></div>
+    </form>
+    <script src="sampler-settings.js"></script>
+    </div>
+  </body>
+</html>
