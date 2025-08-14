@@ -68,6 +68,26 @@ function createWindow() {
     });
   }
 
+  const editMenuItems = [
+    {
+      label: "Settings",
+      accelerator: "CmdOrCtrl+P",
+      click: openSettingsWindow,
+    },
+  ];
+  
+  const editMenuIndex = existingMenuTemplate.findIndex(
+    (item) => item.label === "Edit"
+  );
+
+  if (editMenuIndex >= 0) {
+    existingMenuTemplate[editMenuIndex].submenu = [
+      ...existingMenuTemplate[editMenuIndex].submenu,
+      {type: "separator" },
+      ...editMenuItems,
+    ];
+  }
+
   // Build and set the new menu
   const newMenu = Menu.buildFromTemplate(existingMenuTemplate);
   Menu.setApplicationMenu(newMenu);
@@ -79,8 +99,7 @@ function createWindow() {
   });
 }
 
-// Listen for open-settings request
-ipcMain.handle('open-settings', () => {
+function openSettingsWindow() {
   const modal = new BrowserWindow({
     parent: mainWindow,
     modal: true,
@@ -100,7 +119,10 @@ ipcMain.handle('open-settings', () => {
     // Inform the main window to refresh its UI
     mainWindow.webContents.send('settings-updated');
   });
-});
+}
+
+// Listen for open-settings request
+ipcMain.handle('open-settings', openSettingsWindow);
 
 let autoSavePath = null;
 

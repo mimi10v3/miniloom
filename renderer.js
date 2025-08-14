@@ -1129,11 +1129,6 @@ ipcRenderer.on("invoke-action", (event, action) => {
   }
 });
 
-document.getElementById('openSettingsBtn').addEventListener('click', () => {
-  ipcRenderer.invoke('open-settings');
-});
-
-
 // Helper function to validate chat JSON
 function isValidChatJson(text) {
   try {
