@@ -574,12 +574,58 @@ window.renderTick = function () {
 
     //    branchControlButtonsDiv.append(rewriteButton);
   }
+
+  const genControls = document.createElement("div");
+  genControls.id = "gen-controls";
+    
+  const samplerSelect = document.createElement("select");
+  samplerSelect.id = "sampler-name";
+  const samplerOptionOpenAIComp = document.createElement("option");
+  samplerOptionOpenAIComp.value = "openai";
+  samplerOptionOpenAIComp.text = "OpenAI Completions";
+  const samplerOptionOpenAIChat = document.createElement("option");
+  samplerOptionOpenAIChat.value = "openai-chat";
+  samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
+  const samplerOptionOpenRouter = document.createElement("option")
+  samplerOptionOpenRouter.value = "openrouter";
+  samplerOptionOpenRouter.text = "OpenRouter API";
+  const samplerOptionTogether = document.createElement("option");
+  samplerOptionTogether.value = "together";
+  samplerOptionTogether.text = "Together API";
+  samplerSelect.append(samplerOptionOpenAIComp);
+  samplerSelect.append(samplerOptionOpenAIChat);
+  samplerSelect.append(samplerOptionOpenRouter);
+  samplerSelect.append(samplerOptionTogether);
+  genControls.append(samplerSelect);
+
+  const samplerPresets = document.createElement("select");
+  samplerPresets.id = "sampler-preset-name";
+  for (let samplerPresetName of Object.keys(samplerSettingsStore["sampler-settings"])) {
+    const samplerPresetOption = document.createElement("option");
+    samplerPresetOption.value = samplerPresetName;
+    samplerPresetOption.text = samplerPresetName;
+    samplerPresets.append(samplerPresetOption);
+  }
+  genControls.append(samplerPresets);
+
+  const apiKeys = document.createElement("select");
+  apiKeys.id = "api-key-name";
+  for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
+    const apiKeyOption = document.createElement("option");
+    apiKeyOption.value = apiKeyName;
+    apiKeyOption.text = apiKeyName;
+    apiKeys.append(apiKeyOption);
+  }
+  genControls.append(apiKeys);
+
   const quickRollSpan = document.createElement("span");
   quickRollSpan.classList.add("reroll");
   quickRollSpan.textContent = "🖋️";
   quickRollSpan.onclick = () => reroll(focus.id, false);
-  branchControlButtonsDiv.append(quickRollSpan);
+  genControls.append(quickRollSpan);
+  branchControlButtonsDiv.append(genControls);
 
+    
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
     branchScoreSpan.classList.add("reward-score");

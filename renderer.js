@@ -8,8 +8,6 @@ const MiniSearch = require("minisearch");
 const settingUseWeave = document.getElementById("use-weave");
 const settingNewTokens = document.getElementById("new-tokens");
 const settingBudget = document.getElementById("budget");
-const sampler = document.getElementById("sampler");
-const samplerOptionMenu = document.getElementById("sampler-option-menu");
 const context = document.getElementById("context");
 const editor = document.getElementById("editor");
 const promptTokenCounter = document.getElementById("prompt-token-counter");
@@ -190,7 +188,6 @@ function createTreeLi(node, index, isMaxDepth, parentIds) {
 var loomTree = new LoomTree();
 const loomTreeView = document.getElementById("loom-tree-view");
 let focus = loomTree.nodeStore["1"];
-let samplerSettingsStore = {};
 renderTree(loomTree.root, loomTreeView);
 
 function renderTick() {
@@ -264,6 +261,36 @@ function renderTick() {
   quickRollSpan.onclick = () => reroll(focus.id, false);
   branchControlButtonsDiv.append(quickRollSpan);
 
+  const samplerSelect = document.createElement("select");
+  const samplerOptionOpenAIComp = document.createElement("option");
+  samplerOptionOpenAIComp.value = "openai";
+  samplerOptionOpenAIComp.text = "OpenAI Completions";
+  const samplerOptionOpenAIChat = document.createElement("option");
+  samplerOptionOpenAIChat.value = "openai-chat";
+  samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
+  const samplerOptionOpenRouter = document.createElement("option")
+  samplerOptionOpenRouter.value = "openrouter";
+  samplerOptionOpenRouter.text = "OpenRouter API";
+  const samplerOptionTogether = document.createElement("option");
+  samplerOptionTogether.value = "together";
+  samplerOptionTogether.text = "Together API";
+  samplerSelect.append(samplerOptionOpenAIComp);
+  samplerSelect.append(samplerOptionOpenAIChat);
+  samplerSelect.append(samplerOptionOpenRouter);
+  samplerSelect.append(samplerOptionTogether);
+  branchControlButtonsDiv.append(samplerSelect);
+
+  const samplerPresets = document.createElement("select");
+  for (let samplerPresetName of Object.keys(samplerSettingsStore["sampler-settings"])) {
+    const samplerPresetOption = document.createElement("option");
+    samplerPresetOption.value = samplerPresetName;
+    samplerPresetOption.text = samplerPresetName;
+    samplerPresets.append(samplerPresetOption);
+  }
+  branchControlButtonsDiv.append(samplerPresets);
+
+  console.log(branchControlButtonsDiv);
+
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
     branchScoreSpan.classList.add("reward-score");
@@ -313,6 +340,89 @@ function changeFocus(newFocusId) {
   }
 }
 
+function prepareRollParams() {
+  const sampler = document.getElementById("sampler-name");
+  const presetName = document.getElementById("sampler-preset-name");
+  const apiKeyName = document.getElementById("api-key-name");
+  const preset = samplerSettingsStore["sampler-settings"][presetName.value];
+  const apiKey = samplerSettingsStore["api-keys"][apiKeyName.value];
+  let apiUrl;
+  if ("api-url" in preset) {
+    apiUrl = preset["api-url"]["value"];
+  }
+  else {
+    apiUrl = "";
+  }
+  let outputBranches;
+  if ("output-branches" in preset) {
+    outputBranches = preset["output-branches"]["value"];
+  }
+  else {
+    outputBranches = 2;
+  }
+  let tokensPerBranch;
+  if ("tokens-per-branch" in preset) {
+    tokensPerBranch = preset["tokens-per-branch"]["value"];
+  }
+  else {
+    tokensPerBranch = 256;
+  }
+  let temperature;
+  if ("temperature" in preset) {
+    temperature = preset["temperature"]["value"];
+  }
+  else {
+    temperature = 0.9;
+  }
+  let topP;
+  if ("top-p" in preset) {
+    topP = preset["top-p"]["value"];
+  }
+  else {
+    topP = 1;
+  }
+  let topK;
+  if ("top-k" in preset) {
+    topK = preset["top-k"]["value"];
+  }
+  else {
+    topK = 100;
+  }
+  let repetitionPenalty;
+  if ("repetition-penalty" in preset) {
+    repetitionPenalty = preset["repetition-penalty"]["value"];
+  }
+  else {
+    repetitionPenalty = 1;
+  }
+  let apiDelay;
+  if ("api-delay" in preset) {
+    apiDelay = preset["api-delay"]["value"];
+  }
+  else {
+    apiDelay = 3000;
+  }
+  let modelName;
+  if ("model-name" in preset) {
+    modelName = preset["model-name"]["value"];
+  }
+  else {
+    modelName = "";
+  }
+
+  return {"sampler":sampler.value,
+          "api-url":apiUrl,
+          "output-branches":outputBranches,
+	  "tokens-per-branch":tokensPerBranch,
+	  "temperature":temperature,
+	  "top-p":topP,
+	  "top-k":topK,
+	  "repetition-penalty":repetitionPenalty,
+	  "api-delay":apiDelay,
+	  "model-name":modelName,
+	  "api-key":apiKey,}
+}
+
 async function getResponses(
   endpoint,
   {
@@ -350,10 +460,11 @@ async function getResponses(
 }
 
 async function getSummary(taskText) {
-  const endpoint = document.getElementById("api-url").value;
+  const params = prepareRollParams();
+  const endpoint = params["api-url"];
   const summarizePromptPath = path.join(__dirname, "prompts", "summarize.txt");
   const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
-  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", document.getElementById("model-name").value);
+  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", params["model-name"]);
   // Limit context to 8 * 512, where eight is the average number of letters in a word
   // and 512 is the number of words to summarize over
   // otherwise we eventually end up pushing the few shot prompt out of the context window
@@ -365,7 +476,7 @@ async function getSummary(taskText) {
     "\n</tasktext>\n\nThree Words:";
   // TODO: Flip this case around
   if (
-    !["together", "openrouter", "openai", "openai-chat"].includes(sampler.value)
+    !["together", "openrouter", "openai", "openai-chat"].includes(params["sampler"])
   ) {
     r = await fetch(endpoint + "generate", {
       method: "POST",
@@ -385,17 +496,17 @@ async function getSummary(taskText) {
     return batch[1]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
-  else if (sampler.value == "openai-chat") {
+  else if (params["sampler"] == "openai-chat") {
     r = await fetch(endpoint, {
       method: "POST",
       body: JSON.stringify({
         messages: [{ role: "system", content: prompt }],
-        model: document.getElementById("model-name").value,
+        model: params["model-name"],
         max_tokens: 10,
-        temperature: document.getElementById("temperature").value,
-        top_p: document.getElementById("top-p").value,
-        top_k: document.getElementById("top-k").value,
-        repetition_penalty: document.getElementById("repetition-penalty").value,
+        temperature: params["temperature"],
+        top_p: params["top-p"],
+        top_k: params["top-k"],
+        repetition_penalty: params["repetition-penalty"],
       }),
       headers: {
         "Content-type": "application/json; charset=UTF-8",
@@ -405,17 +516,17 @@ async function getSummary(taskText) {
     return batch.choices[0]["message"]["content"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   } else {
     const tp = {
-      "api-key": document.getElementById("api-key").value,
+      "api-key": params["api-key"],
       "output-branches": 1,
-      "model-name": document.getElementById("model-name").value,
+      "model-name": params["model-name"],
       "tokens-per-branch": 10,
-      temperature: document.getElementById("temperature").value,
-      "top-p": document.getElementById("top-p").value,
-      "top-k": document.getElementById("top-k").value,
-      repetition_penalty: document.getElementById("repetition-penalty").value,
+      temperature: params["temperature"],
+      "top-p": params["top-p"],
+      "top-k": params["top-k"],
+      repetition_penalty: params["repetition-penalty"],
     };
     let batch;
-    if (sampler.value === "openai") {
+    if (params["sampler"] === "openai") {
       batch = await togetherGetResponses({
         endpoint: endpoint,
         prompt: prompt,
@@ -552,20 +663,6 @@ function diceTeardown() {
   die.remove();
 }
 
-async function vaeGuidedGetResponses({ endpoint, params = {} }) {
-  let batch = [];
-  let r = await fetch(endpoint, {
-    method: "POST",
-    body: JSON.stringify(params),
-    headers: {
-      "Content-type": "application/json; charset=UTF-8",
-      accept: "application/json",
-    },
-  });
-  batch = await r.json();
-  return batch;
-}
-
 async function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -659,65 +756,20 @@ async function togetherGetResponses({
 }
 
 async function reroll(id, weave = true) {
-  if (sampler.value === "base") {
+  const params = prepareRollParams();
+  if (params["sampler"] === "base") {
     baseRoll(id, weave);
-  } else if (sampler.value === "vae-guided") {
+  } else if (params["sampler"] === "vae-guided") {
     await vaeGuidedRoll(id);
-  } else if (sampler.value === "together") {
+  } else if (params["sampler"] === "together") {
     togetherRoll(id, (api = "together"));
-  } else if (sampler.value === "openrouter") {
+  } else if (params["sampler"] === "openrouter") {
     togetherRoll(id, (api = "openrouter"));
-  } else if (sampler.value === "openai") {
+  } else if (params["sampler"] === "openai") {
     togetherRoll(id, (api = "openai"));
-  } else if (sampler.value === "openai-chat") {
+  } else if (params["sampler"] === "openai-chat") {
     await openaiChatCompletionsRoll(id);
   }
-}
-
-async function baseRoll(id, weave = true) {
-  diceSetup();
-  await autoSaveTick();
-  await updateFocusSummary();
-  const rerollFocus = loomTree.nodeStore[id];
-  let prompt = loomTree.renderNode(rerollFocus);
-  let includePrompt = false;
-  let endpoint = document.getElementById("api-url").value;
-
-  const wp = {
-    tokens_per_branch: document.getElementById("tokens-per-branch").value,
-    output_branches: document.getElementById("output-branches").value,
-    temperature: document.getElementById("temperature").value,
-  };
-  let newResponses;
-  try {
-    newResponses = await getResponses(endpoint, {
-      prompt: prompt,
-      weave: weave,
-      weaveParams: wp,
-      focusId: rerollFocus.id,
-      includePrompt: includePrompt,
-    });
-  } catch (error) {
-    diceTeardown();
-    errorMessage.textContent = "Error: " + error.message;
-    throw error;
-  }
-  let responses = newResponses;
-  for (let i = 0; i < responses.length; i++) {
-    const response = responses[i];
-    const responseSummary = await getSummary(response["text"]);
-    const childText = loomTree.renderNode(rerollFocus) + response["text"];
-    const responseNode = loomTree.createNode(
-      "gen",
-      rerollFocus,
-      childText,
-      responseSummary
-    );
-    loomTree.nodeStore[responseNode.id]["model"] = response["base_model"];
-  }
-  focus = loomTree.nodeStore[rerollFocus.children.at(-1)];
-  diceTeardown();
-  renderTick();
 }
 
 function readFileAsJson(file) {
@@ -738,79 +790,31 @@ function readFileAsJson(file) {
   });
 }
 
-async function vaeGuidedRoll(id) {
-  diceSetup();
-  await autoSaveTick();
-  await updateFocusSummary();
-  const rollFocus = loomTree.nodeStore[id];
-  let prompt = loomTree.renderNode(rollFocus);
-
-  const params = {
-    output_branches: document.getElementById("output-branches").value,
-    tokens_per_branch: document.getElementById("tokens-per-branch").value,
-    prompt: prompt,
-  };
-  const fileInput = document.getElementById("task-vector");
-  if (fileInput.files.length > 0) {
-    const file = fileInput.files[0];
-    try {
-      params["task_vector"] = await readFileAsJson(file);
-    } catch (error) {
-      errorMessage.textContent = "Error: " + error.message;
-      return;
-    }
-  }
-
-  let responses;
-  try {
-    responses = await vaeGuidedGetResponses({
-      endpoint: document.getElementById("api-url").value + "vae-guided",
-      params: params,
-    });
-  } catch (error) {
-    diceTeardown();
-    errorMessage.textContent = "Error: " + error.message;
-    throw error;
-  }
-  for (let i = 0; i < responses.length; i++) {
-    const response = responses[i];
-    const responseSummary = await getSummary(response["text"]);
-    const childText = loomTree.renderNode(rerollFocus) + response["text"];
-    const responseNode = loomTree.createNode(
-      "gen",
-      rollFocus,
-      childText,
-      responseSummary
-    );
-  }
-  focus = loomTree.nodeStore[rollFocus.children.at(-1)];
-  diceTeardown();
-  renderTick();
-}
-
 async function togetherRoll(id, api = "openai") {
   diceSetup();
   await autoSaveTick();
   await updateFocusSummary();
   const rollFocus = loomTree.nodeStore[id];
   let prompt = loomTree.renderNode(rollFocus);
+  const params = prepareRollParams();
 
-  const apiDelay = document.getElementById("api-delay").value;
+
+  const apiDelay = params["api-delay"];
   const tp = {
-    "api-key": document.getElementById("api-key").value,
-    "model-name": document.getElementById("model-name").value,
-    "output-branches": document.getElementById("output-branches").value,
-    "tokens-per-branch": document.getElementById("tokens-per-branch").value,
-    temperature: document.getElementById("temperature").value,
-    "top-p": document.getElementById("top-p").value,
-    "top-k": document.getElementById("top-k").value,
-    repetition_penalty: document.getElementById("repetition-penalty").value,
+    "api-key": params["api-key"],
+    "model-name": params["model-name"],
+    "output-branches": params["output-branches"],
+    "tokens-per-branch": params["tokens-per-branch"],
+    temperature: params["temperature"],
+    "top-p": params["top-p"],
+    "top-k": params["top-k"],
+    repetition_penalty: params["repetition-penalty"],
     delay: apiDelay,
   };
   let newResponses;
   try {
     newResponses = await togetherGetResponses({
-      endpoint: document.getElementById("api-url").value,
+      endpoint: params["api-url"],
       prompt: prompt,
       togetherParams: tp,
       api: api,
@@ -818,6 +822,7 @@ async function togetherRoll(id, api = "openai") {
   } catch (error) {
     diceTeardown();
     errorMessage.textContent = "Error: " + error.message;
+    console.warn(error);
     throw error;
   }
   for (let i = 0; i < newResponses.length; i++) {
@@ -846,6 +851,7 @@ async function openaiChatCompletionsRoll(id) {
   await updateFocusSummary();
   const rollFocus = loomTree.nodeStore[id];
   let promptText = loomTree.renderNode(rollFocus);
+  const params = prepareRollParams();
 
   try {
     // Parse the JSON from the editor
@@ -855,17 +861,17 @@ async function openaiChatCompletionsRoll(id) {
       throw new Error("Invalid chat format: messages array not found");
     }
 
-    const apiKey = document.getElementById("api-key").value;
-    const modelName = document.getElementById("model-name").value;
+    const apiKey = params["api-key"];
+    const modelName = params["model-name"];
     const temperature = parseFloat(
-      document.getElementById("temperature").value
+      params["temperature"]
     );
-    const topP = parseFloat(document.getElementById("top-p").value);
+    const topP = parseFloat(params["top-p"]);
     const outputBranches = parseInt(
-      document.getElementById("output-branches").value
+      params["output-branches"]
     );
     const tokensPerBranch = parseInt(
-      document.getElementById("tokens-per-branch").value
+      params["tokens-per-branch"]
     );
 
     // Prepare the API request
@@ -879,7 +885,7 @@ async function openaiChatCompletionsRoll(id) {
     };
 
     // Make the API call
-    const response = await fetch(document.getElementById("api-url").value, {
+    const response = await fetch(params["api-url"], {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -980,6 +986,7 @@ editor.addEventListener("input", async (e) => {
 editor.addEventListener("keydown", async (e) => {
   secondsSinceLastTyped = 0;
   const prompt = editor.value;
+  const params = prepareRollParams();
 
   if (focus.children.length == 0 && focus.type == "user" && !updatingNode) {
     updatingNode = true;
@@ -1004,7 +1011,7 @@ editor.addEventListener("keydown", async (e) => {
           "vae-guided",
           "vae-paragraph",
           "vae-bridge",
-        ].includes(sampler.value) &&
+        ].includes(params["sampler"]) &&
         !updatingNode
       ) {
         try {
@@ -1050,17 +1057,6 @@ function loadFile() {
     .catch((err) => console.error("Load File Error:", err));
 }
 
-function loadSettings() {
-  return ipcRenderer
-    .invoke("load-settings")
-    .then((data) => {
-      if (data != null) {
-        samplerSettingsStore = data;
-      }
-    })
-    .catch((err) => console.error("Load Settings Error:", err));
-}
-
 function autoSave() {
   const data = {
     loomTree,
@@ -1081,6 +1077,23 @@ async function autoSaveTick() {
     secondsSinceLastSave = 0;
   }
 }
+
+
+const onSettingsUpdated = async () => {
+  samplerSettingsStore = ipcRenderer
+    .invoke("load-settings")
+    .then((data) => {
+      if (data != null) {
+        samplerSettingsStore = data;
+      }
+    })
+    .catch((err) => console.error("Load Settings Error:", err));
+}
+
+// attach once on startup
+document.addEventListener("DOMContentLoaded", () => {
+  ipcRenderer.on("settings-updated", onSettingsUpdated);
+});
 
 async function updateFocusSummary() {
   if (focus.type == "user" && focus.children.length == 0 && !updatingNode) {
@@ -1116,507 +1129,6 @@ ipcRenderer.on("invoke-action", (event, action) => {
   }
 });
 
-function baseSamplerMenu() {
-  samplerOptionMenu.innerHTML = "";
-  const apiUrlLabel = document.createElement("label");
-  apiUrlLabel.for = "api-url";
-  apiUrlLabel.textContent = "API URL";
-  const apiUrl = document.createElement("input");
-  apiUrl.type = "text";
-  apiUrl.id = "api-url";
-  apiUrl.name = "api-url";
-  apiUrl.value = "http://localhost:5000/";
-  const outputBranchesLabel = document.createElement("label");
-  outputBranchesLabel.for = "output-branches";
-  outputBranchesLabel.classList.add("first-sampler-menu-item");
-  outputBranchesLabel.textContent = "Output Branches";
-  const outputBranches = document.createElement("input");
-  outputBranches.type = "text";
-  outputBranches.id = "output-branches";
-  outputBranches.name = "output-branches";
-  outputBranches.value = "2";
-  const tokensPerBranchLabel = document.createElement("label");
-  tokensPerBranchLabel.for = "tokens-per-branch";
-  tokensPerBranchLabel.textContent = "Tokens Per Branch";
-  const tokensPerBranch = document.createElement("input");
-  tokensPerBranch.type = "text";
-  tokensPerBranch.id = "tokens-per-branch";
-  tokensPerBranch.name = "tokens-per-branch";
-  tokensPerBranch.value = "256";
-  const temperatureLabel = document.createElement("label");
-  temperatureLabel.for = "temperature";
-  temperatureLabel.textContent = "Temperature";
-  const temperature = document.createElement("input");
-  temperature.type = "text";
-  temperature.id = "temperature";
-  temperature.name = "temperature";
-  temperature.value = "0.9";
-  samplerOptionMenu.append(apiUrlLabel);
-  samplerOptionMenu.append(apiUrl);
-  samplerOptionMenu.append(outputBranchesLabel);
-  samplerOptionMenu.append(outputBranches);
-  samplerOptionMenu.append(tokensPerBranchLabel);
-  samplerOptionMenu.append(tokensPerBranch);
-  samplerOptionMenu.append(temperatureLabel);
-  samplerOptionMenu.append(temperature);
-}
-
-function vaeGuidedSamplerMenu() {
-  baseSamplerMenu();
-  const taskVectorLabel = document.createElement("label");
-  taskVectorLabel.for = "task-vector";
-  taskVectorLabel.textContent = "Task Vector";
-  const taskVector = document.createElement("input");
-  taskVector.type = "file";
-  taskVector.id = "task-vector";
-  taskVector.name = "task-vector";
-  samplerOptionMenu.append(taskVectorLabel);
-  samplerOptionMenu.append(taskVector);
-}
-
-function togetherSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://api.together.xyz/inference";
-  const topPLabel = document.createElement("label");
-  topPLabel.for = "top-p";
-  topPLabel.textContent = "Top-P";
-  const topP = document.createElement("input");
-  topP.type = "text";
-  topP.id = "top-p";
-  topP.name = "top-p";
-  topP.value = "1";
-  const topKLabel = document.createElement("label");
-  topKLabel.for = "top-k";
-  topKLabel.textContent = "Top-K";
-  const topK = document.createElement("input");
-  topK.type = "text";
-  topK.id = "top-k";
-  topK.name = "top-k";
-  topK.value = "100";
-  const repetitionPenaltyLabel = document.createElement("label");
-  repetitionPenaltyLabel.for = "repetition-penalty";
-  repetitionPenaltyLabel.textContent = "Repetition Penalty";
-  const repetitionPenalty = document.createElement("input");
-  repetitionPenalty.type = "text";
-  repetitionPenalty.id = "repetition-penalty";
-  repetitionPenalty.name = "repetition-penalty";
-  repetitionPenalty.value = "1";
-  const apiKeyLabel = document.createElement("label");
-  apiKeyLabel.for = "api-key";
-  apiKeyLabel.textContent = "API Key";
-  const apiKey = document.createElement("input");
-  apiKey.type = "password";
-  apiKey.id = "api-key";
-  apiKey.name = "api-key";
-  const apiDelayLabel = document.createElement("label");
-  apiDelayLabel.for = "api-delay";
-  apiDelayLabel.textContent = "API Delay";
-  const apiDelay = document.createElement("input");
-  apiDelay.type = "text";
-  apiDelay.id = "api-delay";
-  apiDelay.name = "api-delay";
-  apiDelay.value = 3000;
-  const modelNameLabel = document.createElement("label");
-  modelNameLabel.for = "model-name";
-  modelNameLabel.textContent = "Model Name";
-  const modelName = document.createElement("input");
-  modelName.type = "text";
-  modelName.id = "model-name";
-  modelName.name = "model-name";
-  modelName.value = "togethercomputer/llama-2-70b";
-  samplerOptionMenu.append(topPLabel);
-  samplerOptionMenu.append(topP);
-  samplerOptionMenu.append(topKLabel);
-  samplerOptionMenu.append(topK);
-  samplerOptionMenu.append(repetitionPenaltyLabel);
-  samplerOptionMenu.append(repetitionPenalty);
-  samplerOptionMenu.append(apiKeyLabel);
-  samplerOptionMenu.append(apiKey);
-  samplerOptionMenu.append(apiDelayLabel);
-  samplerOptionMenu.append(apiDelay);
-  samplerOptionMenu.append(modelNameLabel);
-  samplerOptionMenu.append(modelName);
-}
-
-function openrouterSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://openrouter.ai/api/v1/chat/completions";
-  const topPLabel = document.createElement("label");
-  topPLabel.for = "top-p";
-  topPLabel.textContent = "Top-P";
-  const topP = document.createElement("input");
-  topP.type = "text";
-  topP.id = "top-p";
-  topP.name = "top-p";
-  topP.value = "1";
-  const topKLabel = document.createElement("label");
-  topKLabel.for = "top-k";
-  topKLabel.textContent = "Top-K";
-  const topK = document.createElement("input");
-  topK.type = "text";
-  topK.id = "top-k";
-  topK.name = "top-k";
-  topK.value = "100";
-  const repetitionPenaltyLabel = document.createElement("label");
-  repetitionPenaltyLabel.for = "repetition-penalty";
-  repetitionPenaltyLabel.textContent = "Repetition Penalty";
-  const repetitionPenalty = document.createElement("input");
-  repetitionPenalty.type = "text";
-  repetitionPenalty.id = "repetition-penalty";
-  repetitionPenalty.name = "repetition-penalty";
-  repetitionPenalty.value = "1";
-  const apiKeyLabel = document.createElement("label");
-  apiKeyLabel.for = "api-key";
-  apiKeyLabel.textContent = "API Key";
-  const apiKey = document.createElement("input");
-  apiKey.type = "password";
-  apiKey.id = "api-key";
-  apiKey.name = "api-key";
-  const apiDelayLabel = document.createElement("label");
-  apiDelayLabel.for = "api-delay";
-  apiDelayLabel.textContent = "API Delay";
-  const apiDelay = document.createElement("input");
-  apiDelay.type = "text";
-  apiDelay.id = "api-delay";
-  apiDelay.name = "api-delay";
-  apiDelay.value = 3000;
-  const modelNameLabel = document.createElement("label");
-  modelNameLabel.for = "model-name";
-  modelNameLabel.textContent = "Model Name";
-  const modelName = document.createElement("input");
-  modelName.type = "text";
-  modelName.id = "model-name";
-  modelName.name = "model-name";
-  modelName.value = "deepseek/deepseek-v3-base:free";
-  samplerOptionMenu.append(topPLabel);
-  samplerOptionMenu.append(topP);
-  samplerOptionMenu.append(topKLabel);
-  samplerOptionMenu.append(topK);
-  samplerOptionMenu.append(repetitionPenaltyLabel);
-  samplerOptionMenu.append(repetitionPenalty);
-  samplerOptionMenu.append(apiKeyLabel);
-  samplerOptionMenu.append(apiKey);
-  samplerOptionMenu.append(apiDelayLabel);
-  samplerOptionMenu.append(apiDelay);
-  samplerOptionMenu.append(modelNameLabel);
-  samplerOptionMenu.append(modelName);
-}
-
-function openaiCompletionsSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://api.openai.com/";
-  const topPLabel = document.createElement("label");
-  topPLabel.for = "top-p";
-  topPLabel.textContent = "Top-P";
-  const topP = document.createElement("input");
-  topP.type = "text";
-  topP.id = "top-p";
-  topP.name = "top-p";
-  topP.value = "1";
-  const topKLabel = document.createElement("label");
-  topKLabel.for = "top-k";
-  topKLabel.textContent = "Top-K";
-  const topK = document.createElement("input");
-  topK.type = "text";
-  topK.id = "top-k";
-  topK.name = "top-k";
-  topK.value = "100";
-  const repetitionPenaltyLabel = document.createElement("label");
-  repetitionPenaltyLabel.for = "repetition-penalty";
-  repetitionPenaltyLabel.textContent = "Repetition Penalty";
-  const repetitionPenalty = document.createElement("input");
-  repetitionPenalty.type = "text";
-  repetitionPenalty.id = "repetition-penalty";
-  repetitionPenalty.name = "repetition-penalty";
-  repetitionPenalty.value = "1";
-  const apiKeyLabel = document.createElement("label");
-  apiKeyLabel.for = "api-key";
-  apiKeyLabel.textContent = "API Key";
-  const apiKey = document.createElement("input");
-  apiKey.type = "password";
-  apiKey.id = "api-key";
-  apiKey.name = "api-key";
-  const apiDelayLabel = document.createElement("label");
-  apiDelayLabel.for = "api-delay";
-  apiDelayLabel.textContent = "API Delay";
-  const apiDelay = document.createElement("input");
-  apiDelay.type = "text";
-  apiDelay.id = "api-delay";
-  apiDelay.name = "api-delay";
-  apiDelay.value = 3000;
-  const modelNameLabel = document.createElement("label");
-  modelNameLabel.for = "model-name";
-  modelNameLabel.textContent = "Model Name";
-  const modelName = document.createElement("input");
-  modelName.type = "text";
-  modelName.id = "model-name";
-  modelName.name = "model-name";
-  modelName.value = "code-davinci-002";
-  samplerOptionMenu.append(topPLabel);
-  samplerOptionMenu.append(topP);
-  samplerOptionMenu.append(topKLabel);
-  samplerOptionMenu.append(topK);
-  samplerOptionMenu.append(repetitionPenaltyLabel);
-  samplerOptionMenu.append(repetitionPenalty);
-  samplerOptionMenu.append(apiKeyLabel);
-  samplerOptionMenu.append(apiKey);
-  samplerOptionMenu.append(apiDelayLabel);
-  samplerOptionMenu.append(apiDelay);
-  samplerOptionMenu.append(modelNameLabel);
-  samplerOptionMenu.append(modelName);
-}
-
-// Add this function for the OpenAI Chat Completions sampler menu
-function openaiChatCompletionsSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://api.openai.com/v1/chat/completions";
-
-  const topPLabel = document.createElement("label");
-  topPLabel.for = "top-p";
-  topPLabel.textContent = "Top-P";
-  const topP = document.createElement("input");
-  topP.type = "text";
-  topP.id = "top-p";
-  topP.name = "top-p";
-  topP.value = "1";
-
-  const topKLabel = document.createElement("label");
-  topKLabel.for = "top-k";
-  topKLabel.textContent = "Top-K";
-  const topK = document.createElement("input");
-  topK.type = "text";
-  topK.id = "top-k";
-  topK.name = "top-k";
-  topK.value = "100";
-
-  const repetitionPenaltyLabel = document.createElement("label");
-  repetitionPenaltyLabel.for = "repetition-penalty";
-  repetitionPenaltyLabel.textContent = "Repetition Penalty";
-  const repetitionPenalty = document.createElement("input");
-  repetitionPenalty.type = "text";
-  repetitionPenalty.id = "repetition-penalty";
-  repetitionPenalty.name = "repetition-penalty";
-  repetitionPenalty.value = "1";
-
-  const apiKeyLabel = document.createElement("label");
-  apiKeyLabel.for = "api-key";
-  apiKeyLabel.textContent = "API Key";
-  const apiKey = document.createElement("input");
-  apiKey.type = "password";
-  apiKey.id = "api-key";
-  apiKey.name = "api-key";
-
-  const apiDelayLabel = document.createElement("label");
-  apiDelayLabel.for = "api-delay";
-  apiDelayLabel.textContent = "API Delay";
-  const apiDelay = document.createElement("input");
-  apiDelay.type = "text";
-  apiDelay.id = "api-delay";
-  apiDelay.name = "api-delay";
-  apiDelay.value = 3000;
-
-  const modelNameLabel = document.createElement("label");
-  modelNameLabel.for = "model-name";
-  modelNameLabel.textContent = "Model Name";
-  const modelName = document.createElement("input");
-  modelName.type = "text";
-  modelName.id = "model-name";
-  modelName.name = "model-name";
-  modelName.value = "gpt-4";
-
-  samplerOptionMenu.append(topPLabel);
-  samplerOptionMenu.append(topP);
-  samplerOptionMenu.append(topKLabel);
-  samplerOptionMenu.append(topK);
-  samplerOptionMenu.append(repetitionPenaltyLabel);
-  samplerOptionMenu.append(repetitionPenalty);
-  samplerOptionMenu.append(apiKeyLabel);
-  samplerOptionMenu.append(apiKey);
-  samplerOptionMenu.append(apiDelayLabel);
-  samplerOptionMenu.append(apiDelay);
-  samplerOptionMenu.append(modelNameLabel);
-  samplerOptionMenu.append(modelName);
-}
-
-function baseSamplerMenuToDict() {
-  const out = {};
-  out["apiUrl"] = document.getElementById("api-url").value;
-  out["outputBranches"] = document.getElementById("output-branches").value;
-  out["tokensPerBranch"] = document.getElementById("tokens-per-branch").value;
-  out["temperature"] = document.getElementById("temperature").value;
-  return out;
-}
-
-function vaeGuidedSamplerMenuToDict() {
-  const out = baseSamplerMenuToDict();
-  out["task-vector"] = document.getElementById("task-vector").value;
-  return out;
-}
-
-function togetherSamplerMenuToDict() {
-  const out = baseSamplerMenuToDict();
-  out["topP"] = document.getElementById("top-p").value;
-  out["topK"] = document.getElementById("top-k").value;
-  out["repetitionPenalty"] =
-    document.getElementById("repetition-penalty").value;
-  out["apiKey"] = document.getElementById("api-key").value;
-  out["apiDelay"] = document.getElementById("api-delay").value;
-  out["modelName"] = document.getElementById("model-name").value;
-  return out;
-}
-
-function openrouterSamplerMenuToDict() {
-  return togetherSamplerMenuToDict();
-}
-
-function openaiCompletionsSamplerMenuToDict() {
-  return togetherSamplerMenuToDict();
-}
-
-// Add the sampler settings functions
-function openaiChatCompletionsSamplerMenuToDict() {
-  return togetherSamplerMenuToDict();
-}
-
-function loadBaseSamplerMenuDict(samplerMenuDict) {
-  document.getElementById("api-url").value = samplerMenuDict["apiUrl"];
-  document.getElementById("output-branches").value =
-    samplerMenuDict["outputBranches"];
-  document.getElementById("tokens-per-branch").value =
-    samplerMenuDict["tokensPerBranch"];
-  document.getElementById("temperature").value = samplerMenuDict["temperature"];
-}
-
-function loadVaeGuidedSamplerMenuDict(samplerMenuDict) {
-  loadBaseSamplerMenuDict(samplerMenuDict);
-  document.getElementById("task-vector").value = samplerMenuDict["task-vector"];
-}
-
-function loadTogetherSamplerMenuDict(samplerMenuDict) {
-  loadBaseSamplerMenuDict(samplerMenuDict);
-  document.getElementById("top-p").value = samplerMenuDict["topP"];
-  document.getElementById("top-k").value = samplerMenuDict["topK"];
-  document.getElementById("repetition-penalty").value =
-    samplerMenuDict["repetitionPenalty"];
-  document.getElementById("api-key").value = samplerMenuDict["apiKey"];
-  document.getElementById("api-delay").value = samplerMenuDict["apiDelay"];
-  document.getElementById("model-name").value = samplerMenuDict["modelName"];
-}
-
-function loadOpenRouterSamplerMenuDict(samplerMenuDict) {
-  loadTogetherSamplerMenuDict(samplerMenuDict);
-}
-
-function loadOpenAICompletionsSamplerMenuDict(samplerMenuDict) {
-  loadTogetherSamplerMenuDict(samplerMenuDict);
-}
-
-// Add this function to create a default chat JSON structure
-function createDefaultChatJson() {
-  return JSON.stringify(
-    {
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful assistant.",
-        },
-        {
-          role: "user",
-          content: "Hello!",
-        },
-      ],
-    },
-    null,
-    2
-  );
-}
-
-function loadOpenAIChatCompletionsSamplerMenuDict(samplerMenuDict) {
-  loadTogetherSamplerMenuDict(samplerMenuDict);
-}
-
-function internalSaveSamplerSettings() {
-  let currentSampler = document.getElementById("sampler").value;
-  if (currentSampler === "base") {
-    samplerSettingsStore["base"] = baseSamplerMenuToDict();
-  } else if (currentSampler === "vae-base") {
-    samplerSettingsStore["vae-base"] = vaeBaseSamplerMenuToDict();
-  } else if (currentSampler === "vae-guided") {
-    samplerSettingsStore["vae-guided"] = vaeGuidedSamplerMenuToDict();
-  } else if (currentSampler === "vae-paragraph") {
-    samplerSettingsStore["vae-paragraph"] = vaeParagraphSamplerMenuToDict();
-  } else if (currentSampler === "vae-bridge") {
-    samplerSettingsStore["vae-bridge"] = vaeBridgeSamplerMenuToDict();
-  } else if (currentSampler === "together") {
-    samplerSettingsStore["together"] = togetherSamplerMenuToDict();
-  } else if (currentSampler == "openrouter") {
-    samplerSettingsStore["openrouter"] = openrouterSamplerMenuToDict();
-  } else if (currentSampler === "openai") {
-    samplerSettingsStore["openai"] = openaiCompletionsSamplerMenuToDict();
-  } else if (currentSampler === "openai-chat") {
-    samplerSettingsStore["openai-chat"] =
-      openaiChatCompletionsSamplerMenuToDict();
-  }
-}
-
-samplerOptionMenu.addEventListener("change", internalSaveSamplerSettings);
-sampler.addEventListener("focus", internalSaveSamplerSettings);
-
-sampler.addEventListener("change", function () {
-  let selectedSampler = this.value;
-  if (selectedSampler === "base") {
-    baseSamplerMenu();
-    if ("base" in samplerSettingsStore) {
-      loadBaseSamplerMenuDict(samplerSettingsStore["base"]);
-    }
-  } else if (selectedSampler === "vae-base") {
-    // Not implemented
-    vaeBaseSamplerMenu();
-  } else if (selectedSampler === "vae-guided") {
-    vaeGuidedSamplerMenu();
-    if ("vae-guided" in samplerSettingsStore) {
-      loadVaeGuidedSamplerMenuDict(samplerSettingsStore["vae-guided"]);
-    }
-  } else if (selectedSampler === "vae-paragraph") {
-    // Not implemented
-    vaeParagraphSamplerMenu();
-  } else if (selectedSampler === "vae-bridge") {
-    // Not implemented
-    vaeBridgeSamplerMenu();
-  } else if (selectedSampler === "together") {
-    togetherSamplerMenu();
-    if ("together" in samplerSettingsStore) {
-      loadTogetherSamplerMenuDict(samplerSettingsStore["together"]);
-    }
-  } else if (selectedSampler === "openrouter") {
-    openrouterSamplerMenu();
-    if ("openrouter" in samplerSettingsStore) {
-      loadOpenRouterSamplerMenuDict(samplerSettingsStore["openrouter"]);
-    }
-  } else if (selectedSampler === "openai") {
-    openaiCompletionsSamplerMenu();
-    if ("openai" in samplerSettingsStore) {
-      loadOpenAICompletionsSamplerMenuDict(samplerSettingsStore["openai"]);
-    }
-  } else if (selectedSampler === "openai-chat") {
-    openaiChatCompletionsSamplerMenu();
-    // Initialize with default chat JSON if editor is empty or not valid JSON
-    if (!editor.value.trim() || !isValidChatJson(editor.value)) {
-      editor.value = createDefaultChatJson();
-      updateCounterDisplay(editor.value);
-    }
-    if ("openai-chat" in samplerSettingsStore) {
-      loadOpenAIChatCompletionsSamplerMenuDict(
-        samplerSettingsStore["openai-chat"]
-      );
-    }
-  }
-});
-
 // Helper function to validate chat JSON
 function isValidChatJson(text) {
   try {
@@ -1632,12 +1144,22 @@ editor.addEventListener("contextmenu", (e) => {
   ipcRenderer.send("show-context-menu");
 });
 
-renderTick();
-openaiCompletionsSamplerMenu();
-console.log("openai" in samplerSettingsStore);
-loadSettings().then(() => {
-  if ("openai" in samplerSettingsStore) {
-    loadOpenAICompletionsSamplerMenuDict(samplerSettingsStore["openai"]);
-  }
-});
+let samplerSettingsStore;
+
+function loadSettings() {
+  return ipcRenderer
+    .invoke("load-settings")
+    .then((data) => {
+      if (data != null) {
+        samplerSettingsStore = data;
+      }
+    })
+    .catch((err) => console.error("Load Settings Error:", err));
+}
+
+async function init() {
+  await loadSettings();
+  renderTick();
+}
+init();
 updateCounterDisplay(editor.value || "");

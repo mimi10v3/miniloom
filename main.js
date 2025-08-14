@@ -68,6 +68,26 @@ function createWindow() {
     });
   }
 
+  const editMenuItems = [
+    {
+      label: "Settings",
+      accelerator: "CmdOrCtrl+P",
+      click: openSettingsWindow,
+    },
+  ];
+  
+  const editMenuIndex = existingMenuTemplate.findIndex(
+    (item) => item.label === "Edit"
+  );
+
+  if (editMenuIndex >= 0) {
+    existingMenuTemplate[editMenuIndex].submenu = [
+      ...existingMenuTemplate[editMenuIndex].submenu,
+      {type: "separator" },
+      ...editMenuItems,
+    ];
+  }
+
   // Build and set the new menu
   const newMenu = Menu.buildFromTemplate(existingMenuTemplate);
   Menu.setApplicationMenu(newMenu);
@@ -78,6 +98,31 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+function openSettingsWindow() {
+  const modal = new BrowserWindow({
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    width: 400,
+    height: 300,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    }
+  });
+
+  modal.loadFile('settings.html');
+  modal.once('ready-to-show', () => modal.show());
+
+  modal.on('closed', () => {
+    // Inform the main window to refresh its UI
+    mainWindow.webContents.send('settings-updated');
+  });
+}
+
+// Listen for open-settings request
+ipcMain.handle('open-settings', openSettingsWindow);
 
 let autoSavePath = null;
 
@@ -126,6 +171,7 @@ ipcMain.handle("load-settings", async (event) => {
   }
 });
 
+// Change this so it no longer saves settings
 ipcMain.handle("auto-save", (event, data) => {
   const userFileData = {};
   userFileData["loomTree"] = data["loomTree"];
@@ -133,9 +179,10 @@ ipcMain.handle("auto-save", (event, data) => {
   if (autoSavePath) {
     fs.writeFileSync(autoSavePath, JSON.stringify(userFileData));
   }
+});
 
+ipcMain.handle("save-settings", (event, miniLoomSettings) => {
   const appDataPath = app.getPath("appData");
-  const miniLoomSettings = data["samplerSettingsStore"];
   const miniLoomSettingsDir = path.join(appDataPath, "miniloom");
   const miniLoomSettingsFilePath = path.join(
     miniLoomSettingsDir,

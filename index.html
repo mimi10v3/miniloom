@@ -498,24 +498,6 @@
     </style>
   </head>
   <body>
-    <div id="settings-pane">
-      <form id="sampler-settings">
-        <p>Sampler Settings</p>
-        <label for="sampler">Sampling Method</label>
-        <select id="sampler">
-          <option value="openai">OpenAI Completions</option>
-          <option value="openai-chat">OpenAI Chat Completions</option>
-          <option value="openrouter">OpenRouter API</option>
-          <option value="together">Together API</option>
-          <option value="base">Base Model</option>
-          <option value="vae-base">Unguided VAE</option>
-          <option value="vae-guided">Guided VAE</option>
-          <option value="vae-paragraph">VAE Paragraph</option>
-          <option value="vae-bridge">VAE Bridge</option>
-        </select>
-        <div id="sampler-option-menu"></div>
-      </form>
-    </div>
     <div id="narrative-pane">
       <div id="context">
         <textarea id="editor" placeholder="Your prompt goes here."></textarea>
@@ -558,7 +540,6 @@
       </div>
       <div id="chat-pane"></div>
     </div>
-    
 
     <!-- Include both original and search scripts -->
     <script src="renderer.js"></script>
