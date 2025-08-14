@@ -8,7 +8,6 @@ const MiniSearch = require("minisearch");
 const settingUseWeave = document.getElementById("use-weave");
 const settingNewTokens = document.getElementById("new-tokens");
 const settingBudget = document.getElementById("budget");
-const sampler = document.getElementById("sampler");
 const context = document.getElementById("context");
 const editor = document.getElementById("editor");
 const promptTokenCounter = document.getElementById("prompt-token-counter");
@@ -262,6 +261,36 @@ function renderTick() {
   quickRollSpan.onclick = () => reroll(focus.id, false);
   branchControlButtonsDiv.append(quickRollSpan);
 
+  const samplerSelect = document.createElement("select");
+  const samplerOptionOpenAIComp = document.createElement("option");
+  samplerOptionOpenAIComp.value = "openai";
+  samplerOptionOpenAIComp.text = "OpenAI Completions";
+  const samplerOptionOpenAIChat = document.createElement("option");
+  samplerOptionOpenAIChat.value = "openai-chat";
+  samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
+  const samplerOptionOpenRouter = document.createElement("option")
+  samplerOptionOpenRouter.value = "openrouter";
+  samplerOptionOpenRouter.text = "OpenRouter API";
+  const samplerOptionTogether = document.createElement("option");
+  samplerOptionTogether.value = "together";
+  samplerOptionTogether.text = "Together API";
+  samplerSelect.append(samplerOptionOpenAIComp);
+  samplerSelect.append(samplerOptionOpenAIChat);
+  samplerSelect.append(samplerOptionOpenRouter);
+  samplerSelect.append(samplerOptionTogether);
+  branchControlButtonsDiv.append(samplerSelect);
+
+  const samplerPresets = document.createElement("select");
+  for (let samplerPresetName of Object.keys(samplerSettingsStore["sampler-settings"])) {
+    const samplerPresetOption = document.createElement("option");
+    samplerPresetOption.value = samplerPresetName;
+    samplerPresetOption.text = samplerPresetName;
+    samplerPresets.append(samplerPresetOption);
+  }
+  branchControlButtonsDiv.append(samplerPresets);
+
+  console.log(branchControlButtonsDiv);
+
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
     branchScoreSpan.classList.add("reward-score");
@@ -311,6 +340,89 @@ function changeFocus(newFocusId) {
   }
 }
 
+function prepareRollParams() {
+  const sampler = document.getElementById("sampler-name");
+  const presetName = document.getElementById("sampler-preset-name");
+  const apiKeyName = document.getElementById("api-key-name");
+  const preset = samplerSettingsStore["sampler-settings"][presetName.value];
+  const apiKey = samplerSettingsStore["api-keys"][apiKeyName.value];
+  let apiUrl;
+  if ("api-url" in preset) {
+    apiUrl = preset["api-url"]["value"];
+  }
+  else {
+    apiUrl = "";
+  }
+  let outputBranches;
+  if ("output-branches" in preset) {
+    outputBranches = preset["output-branches"]["value"];
+  }
+  else {
+    outputBranches = 2;
+  }
+  let tokensPerBranch;
+  if ("tokens-per-branch" in preset) {
+    tokensPerBranch = preset["tokens-per-branch"]["value"];
+  }
+  else {
+    tokensPerBranch = 256;
+  }
+  let temperature;
+  if ("temperature" in preset) {
+    temperature = preset["temperature"]["value"];
+  }
+  else {
+    temperature = 0.9;
+  }
+  let topP;
+  if ("top-p" in preset) {
+    topP = preset["top-p"]["value"];
+  }
+  else {
+    topP = 1;
+  }
+  let topK;
+  if ("top-k" in preset) {
+    topK = preset["top-k"]["value"];
+  }
+  else {
+    topK = 100;
+  }
+  let repetitionPenalty;
+  if ("repetition-penalty" in preset) {
+    repetitionPenalty = preset["repetition-penalty"]["value"];
+  }
+  else {
+    repetitionPenalty = 1;
+  }
+  let apiDelay;
+  if ("api-delay" in preset) {
+    apiDelay = preset["api-delay"]["value"];
+  }
+  else {
+    apiDelay = 3000;
+  }
+  let modelName;
+  if ("model-name" in preset) {
+    modelName = preset["model-name"]["value"];
+  }
+  else {
+    modelName = "";
+  }
+
+  return {"sampler":sampler.value,
+          "api-url":apiUrl,
+          "output-branches":outputBranches,
+	  "tokens-per-branch":tokensPerBranch,
+	  "temperature":temperature,
+	  "top-p":topP,
+	  "top-k":topK,
+	  "repetition-penalty":repetitionPenalty,
+	  "api-delay":apiDelay,
+	  "model-name":modelName,
+	  "api-key":apiKey,}
+}
+
 async function getResponses(
   endpoint,
   {
@@ -348,10 +460,11 @@ async function getResponses(
 }
 
 async function getSummary(taskText) {
-  const endpoint = document.getElementById("api-url").value;
+  const params = prepareRollParams();
+  const endpoint = params["api-url"];
   const summarizePromptPath = path.join(__dirname, "prompts", "summarize.txt");
   const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
-  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", document.getElementById("model-name").value);
+  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", params["model-name"]);
   // Limit context to 8 * 512, where eight is the average number of letters in a word
   // and 512 is the number of words to summarize over
   // otherwise we eventually end up pushing the few shot prompt out of the context window
@@ -363,7 +476,7 @@ async function getSummary(taskText) {
     "\n</tasktext>\n\nThree Words:";
   // TODO: Flip this case around
   if (
-    !["together", "openrouter", "openai", "openai-chat"].includes(sampler.value)
+    !["together", "openrouter", "openai", "openai-chat"].includes(params["sampler"])
   ) {
     r = await fetch(endpoint + "generate", {
       method: "POST",
@@ -383,17 +496,17 @@ async function getSummary(taskText) {
     return batch[1]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
-  else if (sampler.value == "openai-chat") {
+  else if (params["sampler"] == "openai-chat") {
     r = await fetch(endpoint, {
       method: "POST",
       body: JSON.stringify({
         messages: [{ role: "system", content: prompt }],
-        model: document.getElementById("model-name").value,
+        model: params["model-name"],
         max_tokens: 10,
-        temperature: document.getElementById("temperature").value,
-        top_p: document.getElementById("top-p").value,
-        top_k: document.getElementById("top-k").value,
-        repetition_penalty: document.getElementById("repetition-penalty").value,
+        temperature: params["temperature"],
+        top_p: params["top-p"],
+        top_k: params["top-k"],
+        repetition_penalty: params["repetition-penalty"],
       }),
       headers: {
         "Content-type": "application/json; charset=UTF-8",
@@ -403,17 +516,17 @@ async function getSummary(taskText) {
     return batch.choices[0]["message"]["content"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
   } else {
     const tp = {
-      "api-key": document.getElementById("api-key").value,
+      "api-key": params["api-key"],
       "output-branches": 1,
-      "model-name": document.getElementById("model-name").value,
+      "model-name": params["model-name"],
       "tokens-per-branch": 10,
-      temperature: document.getElementById("temperature").value,
-      "top-p": document.getElementById("top-p").value,
-      "top-k": document.getElementById("top-k").value,
-      repetition_penalty: document.getElementById("repetition-penalty").value,
+      temperature: params["temperature"],
+      "top-p": params["top-p"],
+      "top-k": params["top-k"],
+      repetition_penalty: params["repetition-penalty"],
     };
     let batch;
-    if (sampler.value === "openai") {
+    if (params["sampler"] === "openai") {
       batch = await togetherGetResponses({
         endpoint: endpoint,
         prompt: prompt,
@@ -550,20 +663,6 @@ function diceTeardown() {
   die.remove();
 }
 
-async function vaeGuidedGetResponses({ endpoint, params = {} }) {
-  let batch = [];
-  let r = await fetch(endpoint, {
-    method: "POST",
-    body: JSON.stringify(params),
-    headers: {
-      "Content-type": "application/json; charset=UTF-8",
-      accept: "application/json",
-    },
-  });
-  batch = await r.json();
-  return batch;
-}
-
 async function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -657,65 +756,20 @@ async function togetherGetResponses({
 }
 
 async function reroll(id, weave = true) {
-  if (sampler.value === "base") {
+  const params = prepareRollParams();
+  if (params["sampler"] === "base") {
     baseRoll(id, weave);
-  } else if (sampler.value === "vae-guided") {
+  } else if (params["sampler"] === "vae-guided") {
     await vaeGuidedRoll(id);
-  } else if (sampler.value === "together") {
+  } else if (params["sampler"] === "together") {
     togetherRoll(id, (api = "together"));
-  } else if (sampler.value === "openrouter") {
+  } else if (params["sampler"] === "openrouter") {
     togetherRoll(id, (api = "openrouter"));
-  } else if (sampler.value === "openai") {
+  } else if (params["sampler"] === "openai") {
     togetherRoll(id, (api = "openai"));
-  } else if (sampler.value === "openai-chat") {
+  } else if (params["sampler"] === "openai-chat") {
     await openaiChatCompletionsRoll(id);
   }
-}
-
-async function baseRoll(id, weave = true) {
-  diceSetup();
-  await autoSaveTick();
-  await updateFocusSummary();
-  const rerollFocus = loomTree.nodeStore[id];
-  let prompt = loomTree.renderNode(rerollFocus);
-  let includePrompt = false;
-  let endpoint = document.getElementById("api-url").value;
-
-  const wp = {
-    tokens_per_branch: document.getElementById("tokens-per-branch").value,
-    output_branches: document.getElementById("output-branches").value,
-    temperature: document.getElementById("temperature").value,
-  };
-  let newResponses;
-  try {
-    newResponses = await getResponses(endpoint, {
-      prompt: prompt,
-      weave: weave,
-      weaveParams: wp,
-      focusId: rerollFocus.id,
-      includePrompt: includePrompt,
-    });
-  } catch (error) {
-    diceTeardown();
-    errorMessage.textContent = "Error: " + error.message;
-    throw error;
-  }
-  let responses = newResponses;
-  for (let i = 0; i < responses.length; i++) {
-    const response = responses[i];
-    const responseSummary = await getSummary(response["text"]);
-    const childText = loomTree.renderNode(rerollFocus) + response["text"];
-    const responseNode = loomTree.createNode(
-      "gen",
-      rerollFocus,
-      childText,
-      responseSummary
-    );
-    loomTree.nodeStore[responseNode.id]["model"] = response["base_model"];
-  }
-  focus = loomTree.nodeStore[rerollFocus.children.at(-1)];
-  diceTeardown();
-  renderTick();
 }
 
 function readFileAsJson(file) {
@@ -736,79 +790,31 @@ function readFileAsJson(file) {
   });
 }
 
-async function vaeGuidedRoll(id) {
-  diceSetup();
-  await autoSaveTick();
-  await updateFocusSummary();
-  const rollFocus = loomTree.nodeStore[id];
-  let prompt = loomTree.renderNode(rollFocus);
-
-  const params = {
-    output_branches: document.getElementById("output-branches").value,
-    tokens_per_branch: document.getElementById("tokens-per-branch").value,
-    prompt: prompt,
-  };
-  const fileInput = document.getElementById("task-vector");
-  if (fileInput.files.length > 0) {
-    const file = fileInput.files[0];
-    try {
-      params["task_vector"] = await readFileAsJson(file);
-    } catch (error) {
-      errorMessage.textContent = "Error: " + error.message;
-      return;
-    }
-  }
-
-  let responses;
-  try {
-    responses = await vaeGuidedGetResponses({
-      endpoint: document.getElementById("api-url").value + "vae-guided",
-      params: params,
-    });
-  } catch (error) {
-    diceTeardown();
-    errorMessage.textContent = "Error: " + error.message;
-    throw error;
-  }
-  for (let i = 0; i < responses.length; i++) {
-    const response = responses[i];
-    const responseSummary = await getSummary(response["text"]);
-    const childText = loomTree.renderNode(rerollFocus) + response["text"];
-    const responseNode = loomTree.createNode(
-      "gen",
-      rollFocus,
-      childText,
-      responseSummary
-    );
-  }
-  focus = loomTree.nodeStore[rollFocus.children.at(-1)];
-  diceTeardown();
-  renderTick();
-}
-
 async function togetherRoll(id, api = "openai") {
   diceSetup();
   await autoSaveTick();
   await updateFocusSummary();
   const rollFocus = loomTree.nodeStore[id];
   let prompt = loomTree.renderNode(rollFocus);
+  const params = prepareRollParams();
 
-  const apiDelay = document.getElementById("api-delay").value;
+
+  const apiDelay = params["api-delay"];
   const tp = {
-    "api-key": document.getElementById("api-key").value,
-    "model-name": document.getElementById("model-name").value,
-    "output-branches": document.getElementById("output-branches").value,
-    "tokens-per-branch": document.getElementById("tokens-per-branch").value,
-    temperature: document.getElementById("temperature").value,
-    "top-p": document.getElementById("top-p").value,
-    "top-k": document.getElementById("top-k").value,
-    repetition_penalty: document.getElementById("repetition-penalty").value,
+    "api-key": params["api-key"],
+    "model-name": params["model-name"],
+    "output-branches": params["output-branches"],
+    "tokens-per-branch": params["tokens-per-branch"],
+    temperature: params["temperature"],
+    "top-p": params["top-p"],
+    "top-k": params["top-k"],
+    repetition_penalty: params["repetition-penalty"],
     delay: apiDelay,
   };
   let newResponses;
   try {
     newResponses = await togetherGetResponses({
-      endpoint: document.getElementById("api-url").value,
+      endpoint: params["api-url"],
       prompt: prompt,
       togetherParams: tp,
       api: api,
@@ -816,6 +822,7 @@ async function togetherRoll(id, api = "openai") {
   } catch (error) {
     diceTeardown();
     errorMessage.textContent = "Error: " + error.message;
+    console.warn(error);
     throw error;
   }
   for (let i = 0; i < newResponses.length; i++) {
@@ -844,6 +851,7 @@ async function openaiChatCompletionsRoll(id) {
   await updateFocusSummary();
   const rollFocus = loomTree.nodeStore[id];
   let promptText = loomTree.renderNode(rollFocus);
+  const params = prepareRollParams();
 
   try {
     // Parse the JSON from the editor
@@ -853,17 +861,17 @@ async function openaiChatCompletionsRoll(id) {
       throw new Error("Invalid chat format: messages array not found");
     }
 
-    const apiKey = document.getElementById("api-key").value;
-    const modelName = document.getElementById("model-name").value;
+    const apiKey = params["api-key"];
+    const modelName = params["model-name"];
     const temperature = parseFloat(
-      document.getElementById("temperature").value
+      params["temperature"]
     );
-    const topP = parseFloat(document.getElementById("top-p").value);
+    const topP = parseFloat(params["top-p"]);
     const outputBranches = parseInt(
-      document.getElementById("output-branches").value
+      params["output-branches"]
     );
     const tokensPerBranch = parseInt(
-      document.getElementById("tokens-per-branch").value
+      params["tokens-per-branch"]
     );
 
     // Prepare the API request
@@ -877,7 +885,7 @@ async function openaiChatCompletionsRoll(id) {
     };
 
     // Make the API call
-    const response = await fetch(document.getElementById("api-url").value, {
+    const response = await fetch(params["api-url"], {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -978,6 +986,7 @@ editor.addEventListener("input", async (e) => {
 editor.addEventListener("keydown", async (e) => {
   secondsSinceLastTyped = 0;
   const prompt = editor.value;
+  const params = prepareRollParams();
 
   if (focus.children.length == 0 && focus.type == "user" && !updatingNode) {
     updatingNode = true;
@@ -1002,7 +1011,7 @@ editor.addEventListener("keydown", async (e) => {
           "vae-guided",
           "vae-paragraph",
           "vae-bridge",
-        ].includes(sampler.value) &&
+        ].includes(params["sampler"]) &&
         !updatingNode
       ) {
         try {
@@ -1069,6 +1078,23 @@ async function autoSaveTick() {
   }
 }
 
+
+const onSettingsUpdated = async () => {
+  samplerSettingsStore = ipcRenderer
+    .invoke("load-settings")
+    .then((data) => {
+      if (data != null) {
+        samplerSettingsStore = data;
+      }
+    })
+    .catch((err) => console.error("Load Settings Error:", err));
+}
+
+// attach once on startup
+document.addEventListener("DOMContentLoaded", () => {
+  ipcRenderer.on("settings-updated", onSettingsUpdated);
+});
+
 async function updateFocusSummary() {
   if (focus.type == "user" && focus.children.length == 0 && !updatingNode) {
     const currentFocus = focus; // Stop focus from changing out underneath us
@@ -1123,5 +1149,22 @@ editor.addEventListener("contextmenu", (e) => {
   ipcRenderer.send("show-context-menu");
 });
 
-renderTick();
+let samplerSettingsStore;
+
+function loadSettings() {
+  return ipcRenderer
+    .invoke("load-settings")
+    .then((data) => {
+      if (data != null) {
+        samplerSettingsStore = data;
+      }
+    })
+    .catch((err) => console.error("Load Settings Error:", err));
+}
+
+async function init() {
+  await loadSettings();
+  renderTick();
+}
+init();
 updateCounterDisplay(editor.value || "");

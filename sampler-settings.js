@@ -88,14 +88,6 @@ function baseSamplerMenu() {
   repetitionPenalty.classList.add("floatType");
   repetitionPenalty.value = "1";
 
-  const apiKeyLabel = document.createElement("label");
-  apiKeyLabel.for = "api-key";
-  apiKeyLabel.textContent = "API Key";
-  const apiKey = document.createElement("input");
-  apiKey.type = "password";
-  apiKey.id = "setting-api-key";
-  apiKey.name = "api-key";
-
   const apiDelayLabel = document.createElement("label");
   apiDelayLabel.for = "api-delay";
   apiDelayLabel.textContent = "API Delay (milliseconds)";
@@ -132,8 +124,6 @@ function baseSamplerMenu() {
   samplerOptionMenu.append(topK);
   samplerOptionMenu.append(repetitionPenaltyLabel);
   samplerOptionMenu.append(repetitionPenalty);
-  samplerOptionMenu.append(apiKeyLabel);
-  samplerOptionMenu.append(apiKey);
   samplerOptionMenu.append(apiDelayLabel);
   samplerOptionMenu.append(apiDelay);
   samplerOptionMenu.append(modelNameLabel);
@@ -334,7 +324,9 @@ function loadSettings() {
 
 // ---------- Tab 1: Sampler Settings ----------
 function renderSamplerSettingsTab() {
-  // Draw the sampler form using your existing per-sampler builders.
+  const samplerLabel = document.getElementById("sampler-label");
+  samplerLabel.style.display = "initial";
+  sampler.style.display = "initial";
   menuHost.innerHTML = "";
 
   // Use whatever sampler is currently selected
@@ -355,6 +347,11 @@ function renderSamplerSettingsTab() {
   } else {
     // Fallback to base
     baseSamplerMenu();
+  }
+
+  if ("sampler-settings" in samplerSettingsStore &&
+      "Default" in samplerSettingsStore["sampler-settings"]) {
+    loadSamplerMenuDict(samplerSettingsStore["sampler-settings"]["Default"]);
   }
 
   // Divider + explicit SAVE UI (no more forced "Default" load)
@@ -424,6 +421,9 @@ function persistStore() {
 }
 
 function renderApiKeysTab() {
+  const samplerLabel = document.getElementById("sampler-label");
+  samplerLabel.style.display = "none";
+  sampler.style.display = "none";
   menuHost.innerHTML = "";
 
   // Add Key form
