@@ -281,13 +281,15 @@ function renderTick() {
   branchControlButtonsDiv.append(samplerSelect);
 
   const samplerPresets = document.createElement("select");
-  for (let samplerPresetName of Object.keys(
-    samplerSettingsStore["sampler-settings"]
-  )) {
-    const samplerPresetOption = document.createElement("option");
-    samplerPresetOption.value = samplerPresetName;
-    samplerPresetOption.text = samplerPresetName;
-    samplerPresets.append(samplerPresetOption);
+  if (samplerSettingsStore && samplerSettingsStore["sampler-settings"]) {
+    for (let samplerPresetName of Object.keys(
+      samplerSettingsStore["sampler-settings"]
+    )) {
+      const samplerPresetOption = document.createElement("option");
+      samplerPresetOption.value = samplerPresetName;
+      samplerPresetOption.text = samplerPresetName;
+      samplerPresets.append(samplerPresetOption);
+    }
   }
   branchControlButtonsDiv.append(samplerPresets);
 
@@ -346,8 +348,23 @@ function prepareRollParams() {
   const sampler = document.getElementById("sampler-name");
   const presetName = document.getElementById("sampler-preset-name");
   const apiKeyName = document.getElementById("api-key-name");
-  const preset = samplerSettingsStore["sampler-settings"][presetName.value];
-  const apiKey = samplerSettingsStore["api-keys"][apiKeyName.value];
+
+  // Handle null/undefined sampler settings
+  const preset =
+    samplerSettingsStore &&
+    samplerSettingsStore["sampler-settings"] &&
+    presetName.value &&
+    samplerSettingsStore["sampler-settings"][presetName.value]
+      ? samplerSettingsStore["sampler-settings"][presetName.value]
+      : {};
+
+  const apiKey =
+    samplerSettingsStore &&
+    samplerSettingsStore["api-keys"] &&
+    apiKeyName.value &&
+    samplerSettingsStore["api-keys"][apiKeyName.value]
+      ? samplerSettingsStore["api-keys"][apiKeyName.value]
+      : "";
   let apiUrl;
   if ("api-url" in preset) {
     apiUrl = preset["api-url"]["value"];

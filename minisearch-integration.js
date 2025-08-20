@@ -600,23 +600,27 @@ window.renderTick = function () {
 
   const samplerPresets = document.createElement("select");
   samplerPresets.id = "sampler-preset-name";
-  for (let samplerPresetName of Object.keys(
-    samplerSettingsStore["sampler-settings"]
-  )) {
-    const samplerPresetOption = document.createElement("option");
-    samplerPresetOption.value = samplerPresetName;
-    samplerPresetOption.text = samplerPresetName;
-    samplerPresets.append(samplerPresetOption);
+  if (samplerSettingsStore && samplerSettingsStore["sampler-settings"]) {
+    for (let samplerPresetName of Object.keys(
+      samplerSettingsStore["sampler-settings"]
+    )) {
+      const samplerPresetOption = document.createElement("option");
+      samplerPresetOption.value = samplerPresetName;
+      samplerPresetOption.text = samplerPresetName;
+      samplerPresets.append(samplerPresetOption);
+    }
   }
   genControls.append(samplerPresets);
 
   const apiKeys = document.createElement("select");
   apiKeys.id = "api-key-name";
-  for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
-    const apiKeyOption = document.createElement("option");
-    apiKeyOption.value = apiKeyName;
-    apiKeyOption.text = apiKeyName;
-    apiKeys.append(apiKeyOption);
+  if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
+    for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
+      const apiKeyOption = document.createElement("option");
+      apiKeyOption.value = apiKeyName;
+      apiKeyOption.text = apiKeyName;
+      apiKeys.append(apiKeyOption);
+    }
   }
   genControls.append(apiKeys);
 
