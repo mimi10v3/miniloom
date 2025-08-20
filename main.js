@@ -15,8 +15,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     title: "MiniLoom",
     icon: path.join(__dirname, "assets/minihf_logo_no_text.png"),
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 900,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -150,6 +150,13 @@ ipcMain.handle("save-file", async (event, data) => {
 
   if (filePath) {
     fs.writeFileSync(filePath, JSON.stringify(data));
+    const creationTime = fs.statSync(filePath).birthtime;
+    mainWindow.webContents.send(
+      "update-filename",
+      path.basename(filePath, ".json"),
+      creationTime,
+      filePath
+    );
   }
 });
 
@@ -163,6 +170,13 @@ ipcMain.handle("load-file", async event => {
   if (filePaths && filePaths.length > 0) {
     const content = fs.readFileSync(filePaths[0], "utf8");
     autoSavePath = filePaths[0]; // Update auto-save path
+    const creationTime = fs.statSync(filePaths[0]).birthtime;
+    mainWindow.webContents.send(
+      "update-filename",
+      path.basename(filePaths[0], ".json"),
+      creationTime,
+      filePaths[0]
+    );
     return JSON.parse(content);
   }
 });

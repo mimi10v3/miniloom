@@ -255,13 +255,8 @@ function renderTick() {
     rewriteButton.onclick = () => promptRewriteNode(focus.id);
     //    branchControlButtonsDiv.append(rewriteButton);
   }
-  const quickRollSpan = document.createElement("span");
-  quickRollSpan.classList.add("reroll");
-  quickRollSpan.textContent = "🖋️";
-  quickRollSpan.onclick = () => reroll(focus.id, false);
-  branchControlButtonsDiv.append(quickRollSpan);
-
   const samplerSelect = document.createElement("select");
+  samplerSelect.id = "sampler-name";
   const samplerOptionOpenAIComp = document.createElement("option");
   samplerOptionOpenAIComp.value = "openai";
   samplerOptionOpenAIComp.text = "OpenAI Completions";
@@ -281,6 +276,7 @@ function renderTick() {
   branchControlButtonsDiv.append(samplerSelect);
 
   const samplerPresets = document.createElement("select");
+  samplerPresets.id = "sampler-preset-name";
   if (samplerSettingsStore && samplerSettingsStore["sampler-settings"]) {
     for (let samplerPresetName of Object.keys(
       samplerSettingsStore["sampler-settings"]
@@ -293,7 +289,30 @@ function renderTick() {
   }
   branchControlButtonsDiv.append(samplerPresets);
 
-  console.log(branchControlButtonsDiv);
+  const apiKeySelect = document.createElement("select");
+  apiKeySelect.id = "api-key-name";
+  if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
+    for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
+      const apiKeyOption = document.createElement("option");
+      apiKeyOption.value = apiKeyName;
+      apiKeyOption.text = apiKeyName;
+      apiKeySelect.append(apiKeyOption);
+    }
+  }
+  branchControlButtonsDiv.append(apiKeySelect);
+
+  const generateButtonContainer = document.createElement("div");
+  generateButtonContainer.classList.add("generate-button-container");
+  const quickRollSpan = document.createElement("span");
+  quickRollSpan.classList.add("reroll");
+  quickRollSpan.innerHTML = "🖋️ <span>Generate</span>";
+  quickRollSpan.onclick = () => reroll(focus.id, false);
+  generateButtonContainer.append(quickRollSpan);
+  branchControlButtonsDiv.append(generateButtonContainer);
+
+  console.log("Generate button container:", generateButtonContainer);
+  console.log("Generate button:", quickRollSpan);
+  console.log("Branch controls div:", branchControlButtonsDiv);
 
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
@@ -1103,6 +1122,20 @@ async function autoSaveTick() {
   }
 }
 
+ipcRenderer.on("update-filename", (event, filename, creationTime, filePath) => {
+  const filenameElement = document.getElementById("current-filename");
+  if (filenameElement) {
+    filenameElement.innerHTML = `💾 ${filename}`;
+
+    if (creationTime) {
+      const formattedTime = new Date(creationTime).toLocaleString();
+      filenameElement.title = `File: ${filePath || "Unknown"}
+Created: ${formattedTime}`;
+    } else {
+      filenameElement.title = `File: ${filePath || "Unknown"}`;
+    }
+  }
+});
 const onSettingsUpdated = async () => {
   samplerSettingsStore = ipcRenderer
     .invoke("load-settings")

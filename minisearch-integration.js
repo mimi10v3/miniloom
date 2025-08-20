@@ -554,6 +554,15 @@ window.renderTick = function () {
     rightThumbClass = "chosen";
   }
 
+  // Create node summary display
+  const nodeSummaryDiv = document.createElement("div");
+  nodeSummaryDiv.classList.add("node-summary");
+  nodeSummaryDiv.textContent = focus.summary || "Root Node";
+
+  // Create thumbs container for word count section
+  const thumbsContainer = document.createElement("div");
+  thumbsContainer.classList.add("thumbs-container");
+
   const leftThumbSpan = document.createElement("span");
   leftThumbSpan.classList.add(leftThumbClass);
   leftThumbSpan.textContent = "👍";
@@ -564,7 +573,21 @@ window.renderTick = function () {
   rightThumbSpan.textContent = "👎";
   rightThumbSpan.onclick = () => promptThumbsDown(focus.id);
 
-  branchControlButtonsDiv.append(leftThumbSpan, rightThumbSpan);
+  thumbsContainer.append(leftThumbSpan, rightThumbSpan);
+
+  // Populate the left controls section
+  const nodeSummaryDisplay = document.getElementById("node-summary-display");
+  const thumbsDisplay = document.getElementById("thumbs-display");
+
+  if (nodeSummaryDisplay) {
+    nodeSummaryDisplay.innerHTML = "";
+    nodeSummaryDisplay.appendChild(nodeSummaryDiv);
+  }
+
+  if (thumbsDisplay) {
+    thumbsDisplay.innerHTML = "";
+    thumbsDisplay.appendChild(thumbsContainer);
+  }
 
   if (focus.type === "gen") {
     const rewriteButton = document.createElement("span");
@@ -577,6 +600,9 @@ window.renderTick = function () {
 
   const genControls = document.createElement("div");
   genControls.id = "gen-controls";
+
+  const dropdownsRow = document.createElement("div");
+  dropdownsRow.classList.add("dropdowns-row");
 
   const samplerSelect = document.createElement("select");
   samplerSelect.id = "sampler-name";
@@ -596,7 +622,7 @@ window.renderTick = function () {
   samplerSelect.append(samplerOptionOpenAIChat);
   samplerSelect.append(samplerOptionOpenRouter);
   samplerSelect.append(samplerOptionTogether);
-  genControls.append(samplerSelect);
+  dropdownsRow.append(samplerSelect);
 
   const samplerPresets = document.createElement("select");
   samplerPresets.id = "sampler-preset-name";
@@ -610,7 +636,7 @@ window.renderTick = function () {
       samplerPresets.append(samplerPresetOption);
     }
   }
-  genControls.append(samplerPresets);
+  dropdownsRow.append(samplerPresets);
 
   const apiKeys = document.createElement("select");
   apiKeys.id = "api-key-name";
@@ -622,13 +648,29 @@ window.renderTick = function () {
       apiKeys.append(apiKeyOption);
     }
   }
-  genControls.append(apiKeys);
+  dropdownsRow.append(apiKeys);
 
+  const generateButtonContainer = document.createElement("div");
+  generateButtonContainer.classList.add("generate-button-container");
   const quickRollSpan = document.createElement("span");
   quickRollSpan.classList.add("reroll");
-  quickRollSpan.textContent = "🖋️";
+  quickRollSpan.innerHTML = "🖋️ <span>Generate</span>";
   quickRollSpan.onclick = () => reroll(focus.id, false);
-  genControls.append(quickRollSpan);
+  // Create die and generate button container
+  const dieAndGenerateContainer = document.createElement("div");
+  dieAndGenerateContainer.classList.add("die-and-generate-container");
+
+  // Move die from dice-holder to here
+  const diceHolder = document.getElementById("dice-holder");
+  if (diceHolder && diceHolder.children.length > 0) {
+    dieAndGenerateContainer.appendChild(diceHolder.children[0]);
+  }
+
+  generateButtonContainer.append(quickRollSpan);
+  dieAndGenerateContainer.append(generateButtonContainer);
+
+  genControls.append(dropdownsRow);
+  genControls.append(dieAndGenerateContainer);
   branchControlButtonsDiv.append(genControls);
 
   if (focus.type === "weave") {
