@@ -24,7 +24,7 @@ function createWindow() {
   });
 
   // Get the existing menu template
-  const existingMenuTemplate = Menu.getApplicationMenu().items.map((item) => {
+  const existingMenuTemplate = Menu.getApplicationMenu().items.map(item => {
     return {
       label: item.label,
       submenu: item.submenu.items,
@@ -52,7 +52,7 @@ function createWindow() {
 
   // Find the File menu in the existing template
   const fileMenuIndex = existingMenuTemplate.findIndex(
-    (item) => item.label === "File"
+    item => item.label === "File"
   );
 
   if (fileMenuIndex >= 0) {
@@ -75,15 +75,15 @@ function createWindow() {
       click: openSettingsWindow,
     },
   ];
-  
+
   const editMenuIndex = existingMenuTemplate.findIndex(
-    (item) => item.label === "Edit"
+    item => item.label === "Edit"
   );
 
   if (editMenuIndex >= 0) {
     existingMenuTemplate[editMenuIndex].submenu = [
       ...existingMenuTemplate[editMenuIndex].submenu,
-      {type: "separator" },
+      { type: "separator" },
       ...editMenuItems,
     ];
   }
@@ -109,20 +109,20 @@ function openSettingsWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-    }
+    },
   });
 
-  modal.loadFile('settings.html');
-  modal.once('ready-to-show', () => modal.show());
+  modal.loadFile("settings.html");
+  modal.once("ready-to-show", () => modal.show());
 
-  modal.on('closed', () => {
+  modal.on("closed", () => {
     // Inform the main window to refresh its UI
-    mainWindow.webContents.send('settings-updated');
+    mainWindow.webContents.send("settings-updated");
   });
 }
 
 // Listen for open-settings request
-ipcMain.handle('open-settings', openSettingsWindow);
+ipcMain.handle("open-settings", openSettingsWindow);
 
 let autoSavePath = null;
 
@@ -144,7 +144,7 @@ ipcMain.handle("save-file", async (event, data) => {
   }
 });
 
-ipcMain.handle("load-file", async (event) => {
+ipcMain.handle("load-file", async event => {
   const { filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: "Load File",
     filters: [{ name: "JSON Files", extensions: ["json"] }],
@@ -158,7 +158,7 @@ ipcMain.handle("load-file", async (event) => {
   }
 });
 
-ipcMain.handle("load-settings", async (event) => {
+ipcMain.handle("load-settings", async event => {
   const miniLoomSettingsFilePath = path.join(
     app.getPath("appData"),
     "miniloom",
@@ -212,7 +212,7 @@ app.on("activate", function () {
   if (mainWindow === null) createWindow();
 });
 
-ipcMain.on("show-context-menu", (event) => {
+ipcMain.on("show-context-menu", event => {
   const contextMenu = Menu.buildFromTemplate([
     { label: "Cut", role: "cut" },
     { label: "Copy", role: "copy" },

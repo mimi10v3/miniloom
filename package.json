@@ -11,7 +11,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^37.2.4"
+    "electron": "^37.2.4",
+    "prettier": "^3.6.2"
   },
   "dependencies": {
     "diff-match-patch": "^1.0.5",

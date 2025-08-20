@@ -159,7 +159,7 @@ function openrouterSamplerMenu() {
   const apiDelay = document.getElementById("api-delay");
   apiDelay.value = 3000;
   const modelName = document.getElementById("model-name");
-  modelName.value = "deepseek/deepseek-v3-base:free";  
+  modelName.value = "deepseek/deepseek-v3-base:free";
 }
 
 function openaiCompletionsSamplerMenu() {
@@ -192,14 +192,14 @@ function openaiChatCompletionsSamplerMenu() {
   const apiDelay = document.getElementById("api-delay");
   apiDelay.value = 3000;
   const modelName = document.getElementById("model-name");
-  modelName.value = "gpt-5";  
+  modelName.value = "gpt-5";
 }
 
 function samplerMenuToDict() {
   const out = {};
   for (let child of samplerOptionMenu.children) {
     if (child.tagName === "INPUT" && child.id !== "setting-api-key") {
-      out[child.id] = {"value": child.value, "type": child.className};
+      out[child.id] = { value: child.value, type: child.className };
     }
   }
   return out;
@@ -217,48 +217,52 @@ function isValidUrl(urlString) {
 
 function validateFieldStringType(fieldValue, fieldType) {
   const fieldValueString = String(fieldValue);
-  const intPattern = /^[0-9]+$/
-  const floatPattern = /^[0-9]+\.?[0-9]*$/
-  const modelNamePattern = /^[a-zA-Z0-9-\._]+$/
+  const intPattern = /^[0-9]+$/;
+  const floatPattern = /^[0-9]+\.?[0-9]*$/;
+  const modelNamePattern = /^[a-zA-Z0-9-\._]+$/;
   let result;
   if (fieldType === "intType") {
     result = fieldValueString.match(intPattern);
-  }
-  else if (fieldType === "floatType") {
+  } else if (fieldType === "floatType") {
     result = fieldValueString.match(floatPattern);
-  }
-  else if (fieldType === "modelNameType") {
+  } else if (fieldType === "modelNameType") {
     result = fieldValueString.match(modelNamePattern);
-  }
-  else if (fieldType === "settingsNameType") {
+  } else if (fieldType === "settingsNameType") {
     result = fieldValueString.match(modelNamePattern);
-  }
-  else if (fieldType === "URLType") {
+  } else if (fieldType === "URLType") {
     result = isValidUrl(fieldValue);
-  }
-  else {
+  } else {
     if (fieldType === "") {
-      console.warn("Tried to validate empty field type. Did you forget to type your form field?");
+      console.warn(
+        "Tried to validate empty field type. Did you forget to type your form field?"
+      );
       result = null;
-    }
-    else {
-      console.warn("Attempted to validate unknown field type")
+    } else {
+      console.warn("Attempted to validate unknown field type");
       result = null;
     }
   }
   return result;
-}  
+}
 
 function loadSamplerMenuDict(samplerMenuDict) {
   for (let field of samplerOptionMenu.children) {
-    if (field.id !== "setting-api-key" &&
-        Object.keys(samplerMenuDict).includes(field.id) &&
-        field.className === samplerMenuDict[field.id]["type"]) {
-      if (validateFieldStringType(samplerMenuDict[field.id]["value"], field.className)) {
+    if (
+      field.id !== "setting-api-key" &&
+      Object.keys(samplerMenuDict).includes(field.id) &&
+      field.className === samplerMenuDict[field.id]["type"]
+    ) {
+      if (
+        validateFieldStringType(
+          samplerMenuDict[field.id]["value"],
+          field.className
+        )
+      ) {
         field.value = samplerMenuDict[field.id]["value"];
-      }
-      else {
-        throw new TypeError("Attempted to import bad sampler settings, is your JSON corrupted?");
+      } else {
+        throw new TypeError(
+          "Attempted to import bad sampler settings, is your JSON corrupted?"
+        );
       }
     }
   }
@@ -288,16 +292,17 @@ function internalSaveSamplerSettings() {
   let currentSampler = document.getElementById("sampler").value;
   let settingsName = document.getElementById("setting-settings-name").value;
   if (Object.keys(samplerSettingsStore).includes("sampler-settings")) {
-    samplerSettingsStore["sampler-settings"][settingsName] = samplerMenuToDict();
-  }
-  else {
+    samplerSettingsStore["sampler-settings"][settingsName] =
+      samplerMenuToDict();
+  } else {
     samplerSettingsStore["sampler-settings"] = new Object();
-    samplerSettingsStore["sampler-settings"][settingsName] = samplerMenuToDict();
+    samplerSettingsStore["sampler-settings"][settingsName] =
+      samplerMenuToDict();
   }
   console.log(samplerSettingsStore);
   ipcRenderer
     .invoke("save-settings", samplerSettingsStore)
-    .catch((err) => console.error("Settings save Error:", err));
+    .catch(err => console.error("Settings save Error:", err));
 }
 
 // samplerOptionMenu.addEventListener("change", internalSaveSamplerSettings);
@@ -312,15 +317,13 @@ sampler?.addEventListener("change", function () {
 function loadSettings() {
   return ipcRenderer
     .invoke("load-settings")
-    .then((data) => {
+    .then(data => {
       if (data != null) {
         samplerSettingsStore = data;
       }
     })
-    .catch((err) => console.error("Load Settings Error:", err));
+    .catch(err => console.error("Load Settings Error:", err));
 }
-
-
 
 // ---------- Tab 1: Sampler Settings ----------
 function renderSamplerSettingsTab() {
@@ -338,10 +341,14 @@ function renderSamplerSettingsTab() {
   else if (selected === "openai-chat") {
     openaiChatCompletionsSamplerMenu();
     // Guard optional editor helpers if present
-    if (typeof editor !== "undefined" && typeof isValidChatJson === "function") {
+    if (
+      typeof editor !== "undefined" &&
+      typeof isValidChatJson === "function"
+    ) {
       if (!editor.value?.trim() || !isValidChatJson(editor.value)) {
         editor.value = createDefaultChatJson();
-        if (typeof updateCounterDisplay === "function") updateCounterDisplay(editor.value);
+        if (typeof updateCounterDisplay === "function")
+          updateCounterDisplay(editor.value);
       }
     }
   } else {
@@ -349,8 +356,10 @@ function renderSamplerSettingsTab() {
     baseSamplerMenu();
   }
 
-  if ("sampler-settings" in samplerSettingsStore &&
-      "Default" in samplerSettingsStore["sampler-settings"]) {
+  if (
+    "sampler-settings" in samplerSettingsStore &&
+    "Default" in samplerSettingsStore["sampler-settings"]
+  ) {
     loadSamplerMenuDict(samplerSettingsStore["sampler-settings"]["Default"]);
   }
 
@@ -397,8 +406,6 @@ function flashSaved(msg, isError = false) {
   setTimeout(() => note.remove(), 1800);
 }
 
-
-
 // ---------- Tab 2: API Keys ----------
 /**
  * Store shape:
@@ -417,7 +424,7 @@ function getApiKeysObject() {
 function persistStore() {
   return ipcRenderer
     .invoke("save-settings", samplerSettingsStore)
-    .catch((err) => console.error("Settings save Error:", err));
+    .catch(err => console.error("Settings save Error:", err));
 }
 
 function renderApiKeysTab() {
@@ -496,7 +503,9 @@ function renderApiKeysTab() {
       showBtn.textContent = "Show";
       showBtn.addEventListener("click", () => {
         const revealed = mask.dataset.revealed === "1";
-        mask.textContent = revealed ? "•".repeat(Math.min(secret?.length || 0, 12)) : (secret || "");
+        mask.textContent = revealed
+          ? "•".repeat(Math.min(secret?.length || 0, 12))
+          : secret || "";
         mask.dataset.revealed = revealed ? "0" : "1";
         showBtn.textContent = revealed ? "Show" : "Hide";
       });
@@ -563,7 +572,7 @@ function setActiveTab(tabName) {
 }
 
 const tabs = document.getElementById("settings-tabs");
-tabs.addEventListener("click", (e) => {
+tabs.addEventListener("click", e => {
   const btn = e.target.closest(".tab-btn");
   if (!btn) return;
   setActiveTab(btn.dataset.tab);
@@ -571,8 +580,10 @@ tabs.addEventListener("click", (e) => {
 
 renderSamplerSettingsTab();
 loadSettings().then(() => {
-  if ("sampler-settings" in samplerSettingsStore &&
-      "Default" in samplerSettingsStore["sampler-settings"]) {
+  if (
+    "sampler-settings" in samplerSettingsStore &&
+    "Default" in samplerSettingsStore["sampler-settings"]
+  ) {
     loadSamplerMenuDict(samplerSettingsStore["sampler-settings"]["Default"]);
   }
 });

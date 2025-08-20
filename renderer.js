@@ -99,7 +99,7 @@ class LoomTree {
   }
 
   _serializeHelper(node) {
-    const serializedChildren = node.children.map((child) =>
+    const serializedChildren = node.children.map(child =>
       this._serializeHelper(this.nodeStore[child])
     );
     return {
@@ -176,7 +176,7 @@ function createTreeLi(node, index, isMaxDepth, parentIds) {
   link.textContent = (node.summary || "").trim() || "Option " + index;
   link.title = index + ". " + link.textContent;
 
-  link.onclick = (event) => {
+  link.onclick = event => {
     event.stopPropagation(); // Stop event bubbling
     changeFocus(node.id);
   };
@@ -268,7 +268,7 @@ function renderTick() {
   const samplerOptionOpenAIChat = document.createElement("option");
   samplerOptionOpenAIChat.value = "openai-chat";
   samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
-  const samplerOptionOpenRouter = document.createElement("option")
+  const samplerOptionOpenRouter = document.createElement("option");
   samplerOptionOpenRouter.value = "openrouter";
   samplerOptionOpenRouter.text = "OpenRouter API";
   const samplerOptionTogether = document.createElement("option");
@@ -281,7 +281,9 @@ function renderTick() {
   branchControlButtonsDiv.append(samplerSelect);
 
   const samplerPresets = document.createElement("select");
-  for (let samplerPresetName of Object.keys(samplerSettingsStore["sampler-settings"])) {
+  for (let samplerPresetName of Object.keys(
+    samplerSettingsStore["sampler-settings"]
+  )) {
     const samplerPresetOption = document.createElement("option");
     samplerPresetOption.value = samplerPresetName;
     samplerPresetOption.text = samplerPresetName;
@@ -349,78 +351,71 @@ function prepareRollParams() {
   let apiUrl;
   if ("api-url" in preset) {
     apiUrl = preset["api-url"]["value"];
-  }
-  else {
+  } else {
     apiUrl = "";
   }
   let outputBranches;
   if ("output-branches" in preset) {
     outputBranches = preset["output-branches"]["value"];
-  }
-  else {
+  } else {
     outputBranches = 2;
   }
   let tokensPerBranch;
   if ("tokens-per-branch" in preset) {
     tokensPerBranch = preset["tokens-per-branch"]["value"];
-  }
-  else {
+  } else {
     tokensPerBranch = 256;
   }
   let temperature;
   if ("temperature" in preset) {
     temperature = preset["temperature"]["value"];
-  }
-  else {
+  } else {
     temperature = 0.9;
   }
   let topP;
   if ("top-p" in preset) {
     topP = preset["top-p"]["value"];
-  }
-  else {
+  } else {
     topP = 1;
   }
   let topK;
   if ("top-k" in preset) {
     topK = preset["top-k"]["value"];
-  }
-  else {
+  } else {
     topK = 100;
   }
   let repetitionPenalty;
   if ("repetition-penalty" in preset) {
     repetitionPenalty = preset["repetition-penalty"]["value"];
-  }
-  else {
+  } else {
     repetitionPenalty = 1;
   }
   let apiDelay;
   if ("api-delay" in preset) {
     apiDelay = preset["api-delay"]["value"];
-  }
-  else {
+  } else {
     apiDelay = 3000;
   }
   let modelName;
   if ("model-name" in preset) {
     modelName = preset["model-name"]["value"];
-  }
-  else {
+  } else {
     modelName = "";
   }
 
-  return {"sampler":sampler.value,
-          "api-url":apiUrl,
-          "output-branches":outputBranches,
-	  "tokens-per-branch":tokensPerBranch,
-	  "temperature":temperature,
-	  "top-p":topP,
-	  "top-k":topK,
-	  "repetition-penalty":repetitionPenalty,
-	  "api-delay":apiDelay,
-	  "model-name":modelName,
-	  "api-key":apiKey,}
+  return {
+    sampler: sampler.value,
+    "api-url": apiUrl,
+    "output-branches": outputBranches,
+    "tokens-per-branch": tokensPerBranch,
+    temperature: temperature,
+    "top-p": topP,
+    "top-k": topK,
+    "repetition-penalty": repetitionPenalty,
+    "api-delay": apiDelay,
+    "model-name": modelName,
+    "api-key": apiKey,
+  };
 }
 
 async function getResponses(
@@ -464,7 +459,10 @@ async function getSummary(taskText) {
   const endpoint = params["api-url"];
   const summarizePromptPath = path.join(__dirname, "prompts", "summarize.txt");
   const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
-  const summarizePrompt = summarizePromptTemplate.replace("{MODEL_NAME}", params["model-name"]);
+  const summarizePrompt = summarizePromptTemplate.replace(
+    "{MODEL_NAME}",
+    params["model-name"]
+  );
   // Limit context to 8 * 512, where eight is the average number of letters in a word
   // and 512 is the number of words to summarize over
   // otherwise we eventually end up pushing the few shot prompt out of the context window
@@ -476,7 +474,9 @@ async function getSummary(taskText) {
     "\n</tasktext>\n\nThree Words:";
   // TODO: Flip this case around
   if (
-    !["together", "openrouter", "openai", "openai-chat"].includes(params["sampler"])
+    !["together", "openrouter", "openai", "openai-chat"].includes(
+      params["sampler"]
+    )
   ) {
     r = await fetch(endpoint + "generate", {
       method: "POST",
@@ -493,7 +493,12 @@ async function getSummary(taskText) {
     });
     let batch = await r.json();
     // Always get last three words
-    return batch[1]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
+    return batch[1]["text"]
+      .trim()
+      .split("\n")[0]
+      .split(" ")
+      .slice(0, 3)
+      .join(" ");
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
   else if (params["sampler"] == "openai-chat") {
@@ -513,7 +518,12 @@ async function getSummary(taskText) {
       },
     });
     let batch = await r.json();
-    return batch.choices[0]["message"]["content"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
+    return batch.choices[0]["message"]["content"]
+      .trim()
+      .split("\n")[0]
+      .split(" ")
+      .slice(0, 3)
+      .join(" ");
   } else {
     const tp = {
       "api-key": params["api-key"],
@@ -540,7 +550,12 @@ async function getSummary(taskText) {
         togetherParams: tp,
       });
     }
-    return batch[0]["text"].trim().split("\n")[0].split(" ").slice(0,3).join(" ");
+    return batch[0]["text"]
+      .trim()
+      .split("\n")[0]
+      .split(" ")
+      .slice(0, 3)
+      .join(" ");
   }
 }
 
@@ -664,7 +679,7 @@ function diceTeardown() {
 }
 
 async function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function togetherGetResponses({
@@ -709,7 +724,7 @@ async function togetherGetResponses({
         });
         return r.json();
       })
-      .then((response_json) => {
+      .then(response_json => {
         let outs = [];
         let choices_length;
         if (api === "openai") {
@@ -775,7 +790,7 @@ async function reroll(id, weave = true) {
 function readFileAsJson(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = e => {
       try {
         const json = JSON.parse(e.target.result);
         resolve(json);
@@ -797,7 +812,6 @@ async function togetherRoll(id, api = "openai") {
   const rollFocus = loomTree.nodeStore[id];
   let prompt = loomTree.renderNode(rollFocus);
   const params = prepareRollParams();
-
 
   const apiDelay = params["api-delay"];
   const tp = {
@@ -863,16 +877,10 @@ async function openaiChatCompletionsRoll(id) {
 
     const apiKey = params["api-key"];
     const modelName = params["model-name"];
-    const temperature = parseFloat(
-      params["temperature"]
-    );
+    const temperature = parseFloat(params["temperature"]);
     const topP = parseFloat(params["top-p"]);
-    const outputBranches = parseInt(
-      params["output-branches"]
-    );
-    const tokensPerBranch = parseInt(
-      params["tokens-per-branch"]
-    );
+    const outputBranches = parseInt(params["output-branches"]);
+    const tokensPerBranch = parseInt(params["tokens-per-branch"]);
 
     // Prepare the API request
     const requestBody = {
@@ -958,7 +966,7 @@ function countWords(text) {
   return text
     .trim()
     .split(/\s+/)
-    .filter((word) => word.length > 0).length;
+    .filter(word => word.length > 0).length;
 }
 
 function updateCounterDisplay(text) {
@@ -971,7 +979,7 @@ function updateCounterDisplay(text) {
 var secondsSinceLastTyped = 0;
 var updatingNode = false;
 
-editor.addEventListener("input", async (e) => {
+editor.addEventListener("input", async e => {
   const prompt = editor.value;
   // Autosave users work when writing next prompt
   if (
@@ -983,7 +991,7 @@ editor.addEventListener("input", async (e) => {
   }
 });
 
-editor.addEventListener("keydown", async (e) => {
+editor.addEventListener("keydown", async e => {
   secondsSinceLastTyped = 0;
   const prompt = editor.value;
   const params = prepareRollParams();
@@ -1042,19 +1050,19 @@ function saveFile() {
   };
   ipcRenderer
     .invoke("save-file", data)
-    .catch((err) => console.error("Save File Error:", err));
+    .catch(err => console.error("Save File Error:", err));
 }
 
 function loadFile() {
   return ipcRenderer
     .invoke("load-file")
-    .then((data) => {
+    .then(data => {
       loomTreeRaw = data.loomTree;
       loomTree = Object.assign(new LoomTree(), loomTreeRaw);
       focus = loomTree.nodeStore[data.focus.id];
       renderTick();
     })
-    .catch((err) => console.error("Load File Error:", err));
+    .catch(err => console.error("Load File Error:", err));
 }
 
 function autoSave() {
@@ -1065,7 +1073,7 @@ function autoSave() {
   };
   ipcRenderer
     .invoke("auto-save", data)
-    .catch((err) => console.error("Auto-save Error:", err));
+    .catch(err => console.error("Auto-save Error:", err));
 }
 
 var secondsSinceLastSave = 0;
@@ -1078,17 +1086,16 @@ async function autoSaveTick() {
   }
 }
 
-
 const onSettingsUpdated = async () => {
   samplerSettingsStore = ipcRenderer
     .invoke("load-settings")
-    .then((data) => {
+    .then(data => {
       if (data != null) {
         samplerSettingsStore = data;
       }
     })
-    .catch((err) => console.error("Load Settings Error:", err));
-}
+    .catch(err => console.error("Load Settings Error:", err));
+};
 
 // attach once on startup
 document.addEventListener("DOMContentLoaded", () => {
@@ -1139,7 +1146,7 @@ function isValidChatJson(text) {
   }
 }
 
-editor.addEventListener("contextmenu", (e) => {
+editor.addEventListener("contextmenu", e => {
   e.preventDefault();
   ipcRenderer.send("show-context-menu");
 });
@@ -1149,12 +1156,12 @@ let samplerSettingsStore;
 function loadSettings() {
   return ipcRenderer
     .invoke("load-settings")
-    .then((data) => {
+    .then(data => {
       if (data != null) {
         samplerSettingsStore = data;
       }
     })
-    .catch((err) => console.error("Load Settings Error:", err));
+    .catch(err => console.error("Load Settings Error:", err));
 }
 
 async function init() {

@@ -24,7 +24,7 @@ function initializeSearchIndex() {
   });
 
   // Add all existing nodes to the index
-  Object.keys(loomTree.nodeStore).forEach((nodeId) => {
+  Object.keys(loomTree.nodeStore).forEach(nodeId => {
     addNodeToSearchIndex(loomTree.nodeStore[nodeId]);
   });
 
@@ -45,11 +45,11 @@ function extractPatchContent(patch) {
     // If patch is a DiffMatchPatch patch array
     if (Array.isArray(patch)) {
       return patch
-        .map((p) => {
+        .map(p => {
           if (p.diffs) {
             return p.diffs
-              .filter((diff) => diff[0] === 1) // Only get insertions (new content)
-              .map((diff) => diff[1])
+              .filter(diff => diff[0] === 1) // Only get insertions (new content)
+              .map(diff => diff[1])
               .join(" ");
           }
           return "";
@@ -132,7 +132,7 @@ function performSearch(query) {
       fuzzy: 0.2,
     });
 
-    return results.map((result) => {
+    return results.map(result => {
       const node = loomTree.nodeStore[result.id];
       return {
         node: node,
@@ -174,7 +174,7 @@ function highlightText(text, query) {
   const words = query.toLowerCase().split(/\s+/);
   let highlighted = text;
 
-  words.forEach((word) => {
+  words.forEach(word => {
     const regex = new RegExp(`(${escapeRegex(word)})`, "gi");
     highlighted = highlighted.replace(regex, "<mark>$1</mark>");
   });
@@ -202,7 +202,7 @@ function renderSearchResults(query, container) {
   const resultsContainer = document.createElement("div");
   resultsContainer.style.cssText = "max-height: 400px; overflow-y: auto;";
 
-  results.forEach((result) => {
+  results.forEach(result => {
     const resultItem = document.createElement("div");
     resultItem.style.cssText = `
             border: 1px solid #ddd;
@@ -351,7 +351,7 @@ function createSearchBar() {
 
   // Search as you type with debouncing
   let searchTimeout;
-  searchInput.addEventListener("input", (e) => {
+  searchInput.addEventListener("input", e => {
     clearTimeout(searchTimeout);
     const query = e.target.value;
 
@@ -374,7 +374,7 @@ function createSearchBar() {
 
   // Handle suggestion clicks and keyboard navigation
   let suggestionIndex = -1;
-  searchInput.addEventListener("keydown", (e) => {
+  searchInput.addEventListener("keydown", e => {
     const suggestions =
       suggestionsContainer.querySelectorAll(".search-suggestion");
 
@@ -406,7 +406,7 @@ function createSearchBar() {
   });
 
   // Hide suggestions when clicking outside
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", e => {
     if (!searchContainer.contains(e.target)) {
       hideSuggestions(suggestionsContainer);
     }
@@ -431,7 +431,7 @@ function showSuggestions(query, container) {
   }
 
   container.innerHTML = "";
-  suggestions.slice(0, 5).forEach((suggestion) => {
+  suggestions.slice(0, 5).forEach(suggestion => {
     // Limit to 5 suggestions
     const item = document.createElement("div");
     item.className = "search-suggestion";
@@ -577,7 +577,7 @@ window.renderTick = function () {
 
   const genControls = document.createElement("div");
   genControls.id = "gen-controls";
-    
+
   const samplerSelect = document.createElement("select");
   samplerSelect.id = "sampler-name";
   const samplerOptionOpenAIComp = document.createElement("option");
@@ -586,7 +586,7 @@ window.renderTick = function () {
   const samplerOptionOpenAIChat = document.createElement("option");
   samplerOptionOpenAIChat.value = "openai-chat";
   samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
-  const samplerOptionOpenRouter = document.createElement("option")
+  const samplerOptionOpenRouter = document.createElement("option");
   samplerOptionOpenRouter.value = "openrouter";
   samplerOptionOpenRouter.text = "OpenRouter API";
   const samplerOptionTogether = document.createElement("option");
@@ -600,7 +600,9 @@ window.renderTick = function () {
 
   const samplerPresets = document.createElement("select");
   samplerPresets.id = "sampler-preset-name";
-  for (let samplerPresetName of Object.keys(samplerSettingsStore["sampler-settings"])) {
+  for (let samplerPresetName of Object.keys(
+    samplerSettingsStore["sampler-settings"]
+  )) {
     const samplerPresetOption = document.createElement("option");
     samplerPresetOption.value = samplerPresetName;
     samplerPresetOption.text = samplerPresetName;
@@ -625,7 +627,6 @@ window.renderTick = function () {
   genControls.append(quickRollSpan);
   branchControlButtonsDiv.append(genControls);
 
-    
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
     branchScoreSpan.classList.add("reward-score");
