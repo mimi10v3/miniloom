@@ -27,12 +27,6 @@ function initializeSearchIndex() {
   Object.keys(loomTree.nodeStore).forEach(nodeId => {
     addNodeToSearchIndex(loomTree.nodeStore[nodeId]);
   });
-
-  console.log(
-    `MiniSearch index initialized with ${
-      Object.keys(loomTree.nodeStore).length
-    } nodes`
-  );
 }
 
 // Extract meaningful content from diff patches
@@ -559,34 +553,12 @@ window.renderTick = function () {
   nodeSummaryDiv.classList.add("node-summary");
   nodeSummaryDiv.textContent = focus.summary || "Root Node";
 
-  // Create thumbs container for word count section
-  const thumbsContainer = document.createElement("div");
-  thumbsContainer.classList.add("thumbs-container");
-
-  const leftThumbSpan = document.createElement("span");
-  leftThumbSpan.classList.add(leftThumbClass);
-  leftThumbSpan.textContent = "👍";
-  leftThumbSpan.onclick = () => promptThumbsUp(focus.id);
-
-  const rightThumbSpan = document.createElement("span");
-  rightThumbSpan.classList.add(rightThumbClass);
-  rightThumbSpan.textContent = "👎";
-  rightThumbSpan.onclick = () => promptThumbsDown(focus.id);
-
-  thumbsContainer.append(leftThumbSpan, rightThumbSpan);
-
   // Populate the left controls section
   const nodeSummaryDisplay = document.getElementById("node-summary-display");
-  const thumbsDisplay = document.getElementById("thumbs-display");
 
   if (nodeSummaryDisplay) {
     nodeSummaryDisplay.innerHTML = "";
     nodeSummaryDisplay.appendChild(nodeSummaryDiv);
-  }
-
-  if (thumbsDisplay) {
-    thumbsDisplay.innerHTML = "";
-    thumbsDisplay.appendChild(thumbsContainer);
   }
 
   if (focus.type === "gen") {

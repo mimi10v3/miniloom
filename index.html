@@ -262,22 +262,9 @@
         background-color: #0056b3;
       }
 
-      .chosen {
-        font-size: 1.3em;
-        cursor: pointer;
-        height: 36px;
-        width: 36px;
-        border-radius: 8px;
-        background-color: #0056b3;
-        color: white;
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 1;
-        transition: all 0.2s;
-        margin-right: 4px;
-        box-sizing: border-box;
+      .thumbs.chosen {
+        background-color: #0056b3 !important;
+        opacity: 1 !important;
       }
 
       .branch-controls {
@@ -521,7 +508,7 @@
       }
 
       #loom-tree-view ul {
-        margin-top: 0.2em;
+        margin-top: 0;
         padding-left: 1.2em;
         margin-left: 0em;
         list-style: none;
@@ -530,6 +517,7 @@
 
       #loom-tree-view > ul {
         padding-left: 0.4em;
+        margin-top: 0;
       }
 
       #loom-tree-view ul::before {
@@ -565,7 +553,7 @@
 
       #loom-tree-view li {
         position: relative;
-        margin: 2px 0;
+        margin: 1px 0;
       }
 
       #loom-tree-view li a {
@@ -576,13 +564,14 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        padding: 3px 7px;
+        padding: 2px 6px;
         border-radius: 4px;
         text-decoration: none;
         color: var(--night);
         background: transparent;
         transition: all 0.2s ease;
         position: relative;
+        vertical-align: middle;
       }
       #loom-tree-view > ul::before {
         content: none;
@@ -598,6 +587,11 @@
         font-weight: 600;
         box-shadow: inset 4px 0 0 var(--engineering-orange);
         padding-left: 12px;
+      }
+
+      #loom-tree-view #focused-node .tree-thumb {
+        color: var(--engineering-orange) !important;
+        font-weight: 600;
       }
 
       .parent-of-focused > a {
@@ -640,25 +634,17 @@
         font-size: 0.8em;
       }
 
-      .upvoted > a::after {
-        content: " 👍";
+      .tree-thumb {
         font-size: 0.8em;
+        margin-left: 4px;
       }
 
-      .downvoted > a::after {
-        content: " 👎";
-        font-size: 0.8em;
+      .tree-thumb.thumb-up {
+        color: #28a745;
       }
 
-      /* Conflicts: hidden + votes */
-      .hidden-parents.upvoted > a::after {
-        content: " 👍⋯";
-        font-size: 0.8em;
-      }
-
-      .hidden-parents.downvoted > a::after {
-        content: " 👎⋯";
-        font-size: 0.8em;
+      .tree-thumb.thumb-down {
+        color: #dc3545;
       }
 
       /* end tree styling */
@@ -775,7 +761,10 @@
                 </div>
               </div>
             </div>
-            <div id="thumbs-display"></div>
+            <div id="thumbs-display">
+              <span id="thumb-up" class="thumbs">👍</span>
+              <span id="thumb-down" class="thumbs">👎</span>
+            </div>
           </div>
           <div id="dice-holder"></div>
         </div>

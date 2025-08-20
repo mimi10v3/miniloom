@@ -180,6 +180,20 @@ function createTreeLi(node, index, isMaxDepth, parentIds) {
     event.stopPropagation(); // Stop event bubbling
     changeFocus(node.id);
   };
+
+  // Add thumb span for rating display
+  const thumbSpan = document.createElement("span");
+  thumbSpan.classList.add("tree-thumb");
+  if (node.rating === true) {
+    thumbSpan.classList.add("thumb-up");
+    thumbSpan.textContent = " 👍";
+  } else if (node.rating === false) {
+    thumbSpan.classList.add("thumb-down");
+    thumbSpan.textContent = " 👎";
+  }
+
+  // Put both link and thumb inside the link so they're part of the selection
+  link.appendChild(thumbSpan);
   nodeSpan.append(link);
   li.append(nodeSpan);
   return li;
@@ -310,10 +324,6 @@ function renderTick() {
   generateButtonContainer.append(quickRollSpan);
   branchControlButtonsDiv.append(generateButtonContainer);
 
-  console.log("Generate button container:", generateButtonContainer);
-  console.log("Generate button:", quickRollSpan);
-  console.log("Branch controls div:", branchControlButtonsDiv);
-
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
     branchScoreSpan.classList.add("reward-score");
@@ -336,6 +346,7 @@ function renderTick() {
   renderTree(focus, loomTreeView);
   errorMessage.textContent = "";
   updateCounterDisplay(editor.value);
+  updateThumbState();
 }
 
 function rotate(direction) {
@@ -355,11 +366,14 @@ function changeFocus(newFocusId) {
   if (focus.type === "user" && focus.children.length == 0) {
     loomTreeView.innerHTML = "";
     renderTree(focus, loomTreeView);
+    updateThumbState();
   } else {
     renderTick();
     editor.selectionStart = editor.value.length;
     editor.selectionEnd = editor.value.length;
     editor.focus();
+    // Ensure thumb state is updated after renderTick
+    setTimeout(() => updateThumbState(), 0);
   }
 }
 
@@ -682,21 +696,70 @@ function promptRewriteNode(id) {
 }
 
 function promptThumbsUp(id) {
-  loomTree.nodeStore[id].rating = true;
-  promptBranchControls = document.getElementById("prompt-branch-controls");
-  thumbUp = promptBranchControls.children.item(0).children.item(0);
-  thumbUp.classList = ["chosen"];
-  thumbDown = promptBranchControls.children.item(0).children.item(1);
-  thumbDown.classList = ["thumbs"];
+  const thumbUp = document.getElementById("thumb-up");
+  const thumbDown = document.getElementById("thumb-down");
+
+  // If already selected, unselect it
+  if (loomTree.nodeStore[id].rating === true) {
+    loomTree.nodeStore[id].rating = null;
+    thumbUp.classList.remove("chosen");
+  } else {
+    // Select this one and unselect the other
+    loomTree.nodeStore[id].rating = true;
+    thumbUp.classList.add("chosen");
+    thumbDown.classList.remove("chosen");
+  }
+
+  // Update tree view to reflect the rating change
+  const loomTreeView = document.getElementById("loom-tree-view");
+  if (loomTreeView) {
+    loomTreeView.innerHTML = "";
+    renderTree(focus, loomTreeView);
+  }
 }
 
 function promptThumbsDown(id) {
-  loomTree.nodeStore[id].rating = false;
-  promptBranchControls = document.getElementById("prompt-branch-controls");
-  thumbUp = promptBranchControls.children.item(0).children.item(0);
-  thumbUp.classList = ["thumbs"];
-  thumbDown = promptBranchControls.children.item(0).children.item(1);
-  thumbDown.classList = ["chosen"];
+  const thumbUp = document.getElementById("thumb-up");
+  const thumbDown = document.getElementById("thumb-down");
+
+  // If already selected, unselect it
+  if (loomTree.nodeStore[id].rating === false) {
+    loomTree.nodeStore[id].rating = null;
+    thumbDown.classList.remove("chosen");
+  } else {
+    // Select this one and unselect the other
+    loomTree.nodeStore[id].rating = false;
+    thumbDown.classList.add("chosen");
+    thumbUp.classList.remove("chosen");
+  }
+
+  // Update tree view to reflect the rating change
+  const loomTreeView = document.getElementById("loom-tree-view");
+  if (loomTreeView) {
+    loomTreeView.innerHTML = "";
+    renderTree(focus, loomTreeView);
+  }
+}
+
+function updateThumbState() {
+  const thumbUp = document.getElementById("thumb-up");
+  const thumbDown = document.getElementById("thumb-down");
+
+  console.log("updateThumbState called, focus.rating:", focus.rating);
+  console.log("Found thumbs:", thumbUp, thumbDown);
+
+  if (thumbUp && thumbDown) {
+    thumbUp.classList.remove("chosen");
+    thumbDown.classList.remove("chosen");
+
+    if (focus.rating === true) {
+      thumbUp.classList.add("chosen");
+      console.log("Added chosen to thumb up");
+    } else if (focus.rating === false) {
+      thumbDown.classList.add("chosen");
+      console.log("Added chosen to thumb down");
+    }
+  }
 }
 
 function diceSetup() {
@@ -732,7 +795,6 @@ async function togetherGetResponses({
   // But OpenAI expects you to use the n parameter
   let calls = api === "openai" ? 1 : tp["output-branches"];
   for (let i = 1; i <= calls; i++) {
-    console.log("Together API called");
     const body = {
       model: tp["model-name"],
       prompt: prompt,
@@ -1038,45 +1100,43 @@ editor.addEventListener("keydown", async e => {
     updatingNode = false;
   }
 
-  if (e.key != "Enter") {
-    // Update character/word count on every keystroke
-    updateCounterDisplay(prompt);
+  // Update character/word count on every keystroke
+  updateCounterDisplay(prompt);
 
-    if (prompt.length % 32 == 0) {
-      // Removed the fetch call to check-tokens endpoint
+  if (prompt.length % 32 == 0) {
+    // Removed the fetch call to check-tokens endpoint
 
-      // Update summary while user is writing next prompt
-      if (
-        focus.children.length == 0 &&
-        focus.type == "user" &&
-        [
-          "base",
-          "vae-base",
-          "vae-guided",
-          "vae-paragraph",
-          "vae-bridge",
-        ].includes(params["sampler"]) &&
-        !updatingNode
-      ) {
-        try {
-          updatingNode = true;
-          const summary = await getSummary(prompt);
-          loomTree.updateNode(focus, prompt, summary);
-          updatingNode = false;
-        } catch (error) {
-          console.log(error);
-          updatingNode = false;
-        }
+    // Update summary while user is writing next prompt
+    if (
+      focus.children.length == 0 &&
+      focus.type == "user" &&
+      [
+        "base",
+        "vae-base",
+        "vae-guided",
+        "vae-paragraph",
+        "vae-bridge",
+      ].includes(params["sampler"]) &&
+      !updatingNode
+    ) {
+      try {
+        updatingNode = true;
+        const summary = await getSummary(prompt);
+        loomTree.updateNode(focus, prompt, summary);
+        updatingNode = false;
+      } catch (error) {
+        console.log(error);
+        updatingNode = false;
       }
-      // Render only the loom tree so we don't interrupt their typing
-      loomTreeView.innerHTML = "";
-      renderTree(focus, loomTreeView);
     }
-    return null;
-  } else if (!e.shiftKey) {
-    return null;
+    // Render only the loom tree so we don't interrupt their typing
+    loomTreeView.innerHTML = "";
+    renderTree(focus, loomTreeView);
   }
-  reroll(focus.id, settingUseWeave.checked);
+  // Check for Control+Enter or Command+Enter (Mac)
+  if (e.key == "Enter" && (e.ctrlKey || e.metaKey)) {
+    reroll(focus.id, settingUseWeave?.checked ?? true);
+  }
 });
 
 function saveFile() {
@@ -1097,6 +1157,7 @@ function loadFile() {
       loomTree = Object.assign(new LoomTree(), loomTreeRaw);
       focus = loomTree.nodeStore[data.focus.id];
       renderTick();
+      updateThumbState();
     })
     .catch(err => console.error("Load File Error:", err));
 }
@@ -1216,7 +1277,22 @@ function loadSettings() {
 
 async function init() {
   await loadSettings();
+
+  // Add click handlers to thumbs
+  const thumbUp = document.getElementById("thumb-up");
+  const thumbDown = document.getElementById("thumb-down");
+
+  if (thumbUp) {
+    thumbUp.onclick = () => promptThumbsUp(focus.id);
+  }
+  if (thumbDown) {
+    thumbDown.onclick = () => promptThumbsDown(focus.id);
+  }
+
   renderTick();
+
+  // Update initial thumb state
+  updateThumbState();
 }
 init();
 updateCounterDisplay(editor.value || "");
