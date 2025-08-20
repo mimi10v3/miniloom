@@ -321,9 +321,13 @@
       }
 
       .generate-button-container {
-        display: inline-block;
-        margin-left: 16px;
-        width: auto !important;
+        display: inline-flex;
+        align-items: center;
+        margin-left: auto;
+        flex-shrink: 0;
+        position: absolute;
+        right: 16px;
+        bottom: 6px;
       }
 
       #gen-controls {
@@ -362,6 +366,7 @@
         align-items: flex-start;
         flex-shrink: 0;
         gap: 16px;
+        position: relative;
       }
 
       #controls-left {
@@ -432,7 +437,19 @@
         align-items: center;
         justify-content: center;
         transform-origin: center center;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease;
+        position: absolute;
+        right: 140px;
+        bottom: 6px;
+        z-index: 10;
+      }
+
+      #die.rolling {
         animation: spin 0.4s linear infinite;
+        opacity: 1;
+        visibility: visible;
       }
 
       @keyframes spin {
@@ -766,7 +783,12 @@
               <span id="thumb-down" class="thumbs">👎</span>
             </div>
           </div>
-          <div id="dice-holder"></div>
+          <div id="die">🎲</div>
+          <div id="generate-button-container" class="generate-button-container">
+            <span id="generate-button" class="reroll"
+              >🖋️ <span>Generate</span></span
+            >
+          </div>
         </div>
         <div id="errors">
           <p id="error-message"></p>

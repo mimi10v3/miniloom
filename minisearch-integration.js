@@ -622,27 +622,13 @@ window.renderTick = function () {
   }
   dropdownsRow.append(apiKeys);
 
-  const generateButtonContainer = document.createElement("div");
-  generateButtonContainer.classList.add("generate-button-container");
-  const quickRollSpan = document.createElement("span");
-  quickRollSpan.classList.add("reroll");
-  quickRollSpan.innerHTML = "🖋️ <span>Generate</span>";
-  quickRollSpan.onclick = () => reroll(focus.id, false);
-  // Create die and generate button container
-  const dieAndGenerateContainer = document.createElement("div");
-  dieAndGenerateContainer.classList.add("die-and-generate-container");
-
-  // Move die from dice-holder to here
-  const diceHolder = document.getElementById("dice-holder");
-  if (diceHolder && diceHolder.children.length > 0) {
-    dieAndGenerateContainer.appendChild(diceHolder.children[0]);
+  // Enhance the existing generate button
+  const generateButton = document.getElementById("generate-button");
+  if (generateButton) {
+    generateButton.onclick = () => reroll(focus.id, false);
   }
 
-  generateButtonContainer.append(quickRollSpan);
-  dieAndGenerateContainer.append(generateButtonContainer);
-
   genControls.append(dropdownsRow);
-  genControls.append(dieAndGenerateContainer);
   branchControlButtonsDiv.append(genControls);
 
   if (focus.type === "weave") {

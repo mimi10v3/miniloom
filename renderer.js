@@ -315,14 +315,11 @@ function renderTick() {
   }
   branchControlButtonsDiv.append(apiKeySelect);
 
-  const generateButtonContainer = document.createElement("div");
-  generateButtonContainer.classList.add("generate-button-container");
-  const quickRollSpan = document.createElement("span");
-  quickRollSpan.classList.add("reroll");
-  quickRollSpan.innerHTML = "🖋️ <span>Generate</span>";
-  quickRollSpan.onclick = () => reroll(focus.id, false);
-  generateButtonContainer.append(quickRollSpan);
-  branchControlButtonsDiv.append(generateButtonContainer);
+  // Generate button is now in HTML, just update its click handler
+  const generateButton = document.getElementById("generate-button");
+  if (generateButton) {
+    generateButton.onclick = () => reroll(focus.id, false);
+  }
 
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
@@ -764,17 +761,18 @@ function updateThumbState() {
 
 function diceSetup() {
   editor.readOnly = true;
-  const diceHolder = document.getElementById("dice-holder");
-  const die = document.createElement("p");
-  die.innerText = "🎲";
-  die.id = "die";
-  diceHolder.appendChild(die);
+  const die = document.getElementById("die");
+  if (die) {
+    die.classList.add("rolling");
+  }
 }
 
 function diceTeardown() {
   editor.readOnly = false;
   const die = document.getElementById("die");
-  die.remove();
+  if (die) {
+    die.classList.remove("rolling");
+  }
 }
 
 async function delay(ms) {
