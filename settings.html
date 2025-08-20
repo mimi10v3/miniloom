@@ -95,9 +95,39 @@
           ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
           monospace;
       }
+
+      /* Close button styles */
+      .close-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 24px;
+        height: 24px;
+        border: none;
+        background: #f0f0f0;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: bold;
+        color: #666;
+        z-index: 1000;
+      }
+
+      .close-btn:hover {
+        background: #e0e0e0;
+        color: #333;
+      }
+
+      .close-btn:active {
+        background: #d0d0d0;
+      }
     </style>
   </head>
   <body>
+    <button class="close-btn" id="close-settings">×</button>
     <div id="settings-tabs">
       <button class="tab-btn active" data-tab="sampler-settings">
         Sampler Settings
@@ -117,5 +147,14 @@
       </form>
       <script src="sampler-settings.js"></script>
     </div>
+    <script>
+      // Handle close button click
+      document
+        .getElementById("close-settings")
+        .addEventListener("click", () => {
+          const { ipcRenderer } = require("electron");
+          ipcRenderer.send("close-settings-window");
+        });
+    </script>
   </body>
 </html>

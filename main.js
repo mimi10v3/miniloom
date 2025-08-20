@@ -124,6 +124,15 @@ function openSettingsWindow() {
 // Listen for open-settings request
 ipcMain.handle("open-settings", openSettingsWindow);
 
+// Listen for close-settings-window request
+ipcMain.on("close-settings-window", event => {
+  const sender = event.sender;
+  const window = BrowserWindow.fromWebContents(sender);
+  if (window) {
+    window.close();
+  }
+});
+
 let autoSavePath = null;
 
 ipcMain.handle("save-file", async (event, data) => {
