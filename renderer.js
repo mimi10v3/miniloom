@@ -951,7 +951,10 @@ async function togetherRoll(id, api = "openai") {
     );
     loomTree.nodeStore[responseNode.id]["model"] = response["model"];
   }
-  focus = loomTree.nodeStore[rollFocus.children.at(-1)];
+  // Focus on the first generated response, but only if we're still on the same node
+  if (focus === rollFocus) {
+    focus = loomTree.nodeStore[rollFocus.children[0]];
+  }
   diceTeardown();
   renderTick();
 }
@@ -1043,8 +1046,10 @@ async function openaiChatCompletionsRoll(id) {
         choice.finish_reason;
     }
 
-    // Focus on the last generated response
-    focus = loomTree.nodeStore[rollFocus.children.at(-1)];
+    // Focus on the first generated response, but only if we're still on the same node
+    if (focus === rollFocus) {
+      focus = loomTree.nodeStore[rollFocus.children[0]];
+    }
   } catch (error) {
     diceTeardown();
     errorMessage.textContent = "Error: " + error.message;
