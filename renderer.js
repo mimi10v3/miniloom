@@ -906,6 +906,8 @@ async function togetherRoll(id, api = "openai") {
   await autoSaveTick();
   await updateFocusSummary();
   const rollFocus = loomTree.nodeStore[id];
+  const lastChildIndex =
+    rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
   let prompt = loomTree.renderNode(rollFocus);
   const params = prepareRollParams();
 
@@ -949,9 +951,15 @@ async function togetherRoll(id, api = "openai") {
     );
     loomTree.nodeStore[responseNode.id]["model"] = response["model"];
   }
-  // Focus on the first generated response, but only if we're still on the same node
+  // Focus on the first newly generated response, but only if we're still on the same node
   if (focus === rollFocus) {
-    focus = loomTree.nodeStore[rollFocus.children[0]];
+    if (lastChildIndex === null) {
+      // No children before, focus on the first one
+      focus = loomTree.nodeStore[rollFocus.children[0]];
+    } else {
+      // Focus on the first new child (lastChildIndex + 1)
+      focus = loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]];
+    }
   }
   diceTeardown();
   renderTick();
@@ -963,6 +971,8 @@ async function openaiChatCompletionsRoll(id) {
   await autoSaveTick();
   await updateFocusSummary();
   const rollFocus = loomTree.nodeStore[id];
+  const lastChildIndex =
+    rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
   let promptText = loomTree.renderNode(rollFocus);
   const params = prepareRollParams();
 
@@ -1044,9 +1054,15 @@ async function openaiChatCompletionsRoll(id) {
         choice.finish_reason;
     }
 
-    // Focus on the first generated response, but only if we're still on the same node
+    // Focus on the first newly generated response, but only if we're still on the same node
     if (focus === rollFocus) {
-      focus = loomTree.nodeStore[rollFocus.children[0]];
+      if (lastChildIndex === null) {
+        // No children before, focus on the first one
+        focus = loomTree.nodeStore[rollFocus.children[0]];
+      } else {
+        // Focus on the first new child (lastChildIndex + 1)
+        focus = loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]];
+      }
     }
   } catch (error) {
     diceTeardown();
