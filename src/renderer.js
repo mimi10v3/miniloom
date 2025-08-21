@@ -4,15 +4,10 @@ const { ipcRenderer } = require("electron");
 const DiffMatchPatch = require("diff-match-patch");
 const dmp = new DiffMatchPatch();
 const MiniSearch = require("minisearch");
+// Remove the require for utils.js since it's loaded as a script tag
 
-const settingUseWeave = document.getElementById("use-weave");
-const settingNewTokens = document.getElementById("new-tokens");
-const settingBudget = document.getElementById("budget");
-const context = document.getElementById("context");
 const editor = document.getElementById("editor");
 const promptTokenCounter = document.getElementById("prompt-token-counter");
-const saveBtn = document.getElementById("save");
-const loadBtn = document.getElementById("load");
 const errorMessage = document.getElementById("error-message");
 
 class Node {
@@ -46,6 +41,12 @@ class LoomTree {
     }
     parent.children.push(newNodeId);
     this.nodeStore[newNodeId] = newNode;
+
+    // Notify search manager if available
+    if (window.searchManager && window.searchManager.addNode) {
+      window.searchManager.addNode(newNode);
+    }
+
     return newNode;
   }
 
@@ -62,6 +63,11 @@ class LoomTree {
     node.timestamp = Date.now();
     node.patch = patch;
     node.summary = summary;
+
+    // Notify search manager if available
+    if (window.searchManager && window.searchManager.updateNode) {
+      window.searchManager.updateNode(node);
+    }
   }
 
   renderNode(node) {
@@ -241,52 +247,12 @@ function renderTick() {
   const branchControlButtonsDiv = document.createElement("div");
   branchControlButtonsDiv.classList.add("branch-control-buttons");
 
-  var leftThumbClass = "thumbs";
-  var rightThumbClass = "thumbs";
-  if (focus.rating) {
-    leftThumbClass = "chosen";
-  } else if (focus.rating == false) {
-    rightThumbClass = "chosen";
-  }
-
-  const leftThumbSpan = document.createElement("span");
-  leftThumbSpan.classList.add(leftThumbClass);
-  leftThumbSpan.textContent = "👍";
-  leftThumbSpan.onclick = () => promptThumbsUp(focus.id);
-
-  const rightThumbSpan = document.createElement("span");
-  rightThumbSpan.classList.add(rightThumbClass);
-  rightThumbSpan.textContent = "👎";
-  rightThumbSpan.onclick = () => promptThumbsDown(focus.id);
-
-  branchControlButtonsDiv.append(leftThumbSpan, rightThumbSpan);
-
-  // TODO: re-enable or remove this feature
-  if (focus.type === "user") {
-    //    branchControlButtonsDiv.append(rewriteButton);
-  }
-
-  // Generate button is now in HTML, just update its click handler
   const generateButton = document.getElementById("generate-button");
   if (generateButton) {
     generateButton.onclick = () => reroll(focus.id, false);
   }
 
-  if (focus.type === "weave") {
-    const branchScoreSpan = document.createElement("span");
-    branchScoreSpan.classList.add("reward-score");
-    try {
-      const score = focus["nodes"].at(-1).score;
-      const prob = 1 / (Math.exp(-score) + 1);
-      branchScoreSpan.textContent = (prob * 100).toPrecision(4) + "%";
-    } catch (error) {
-      branchScoreSpan.textContent = "N.A.";
-    }
-    branchControlsDiv.append(branchControlButtonsDiv, branchScoreSpan);
-  } else {
-    branchControlsDiv.append(branchControlButtonsDiv);
-  }
-
+  branchControlsDiv.append(branchControlButtonsDiv);
   controls.append(branchControlsDiv);
 
   focus.read = true;
@@ -295,17 +261,6 @@ function renderTick() {
   errorMessage.textContent = "";
   updateCounterDisplay(editor.value);
   updateThumbState();
-}
-
-function rotate(direction) {
-  const parent = responseDict[focus.parent];
-  const selection = parent.children.indexOf(focus.id);
-  if (direction === "left" && selection > 0) {
-    focus = responseDict[parent.children[selection - 1]];
-  } else if (direction === "right" && selection < parent.children.length - 1) {
-    focus = responseDict[parent.children[selection + 1]];
-  }
-  renderResponses();
 }
 
 function changeFocus(newFocusId) {
@@ -437,7 +392,12 @@ async function getResponses(
 async function getSummary(taskText) {
   const params = prepareRollParams();
   const endpoint = params["api-url"];
-  const summarizePromptPath = path.join(__dirname, "prompts", "summarize.txt");
+  const summarizePromptPath = path.join(
+    __dirname,
+    "..",
+    "prompts",
+    "summarize.txt"
+  );
   const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
   const summarizePrompt = summarizePromptTemplate.replace(
     "{MODEL_NAME}",
@@ -542,7 +502,12 @@ async function getSummary(taskText) {
 async function rewriteNode(id) {
   const endpoint = document.getElementById("api-url").value;
   const rewriteNodePrompt = document.getElementById("rewrite-node-prompt");
-  const rewritePromptPath = path.join(__dirname, "prompts", "rewrite.txt");
+  const rewritePromptPath = path.join(
+    __dirname,
+    "..",
+    "prompts",
+    "rewrite.txt"
+  );
   const rewritePrompt = fs.readFileSync(rewritePromptPath, "utf8");
   const rewriteFeedback = rewriteNodePrompt.value;
   const rewriteContext = editor.value;
@@ -685,9 +650,10 @@ function updateThumbState() {
   }
 }
 
+const die = document.getElementById("die");
+
 function diceSetup() {
   editor.readOnly = true;
-  const die = document.getElementById("die");
   if (die) {
     die.classList.add("rolling");
   }
@@ -695,7 +661,6 @@ function diceSetup() {
 
 function diceTeardown() {
   editor.readOnly = false;
-  const die = document.getElementById("die");
   if (die) {
     die.classList.remove("rolling");
   }
@@ -840,24 +805,6 @@ async function reroll(id, weave = true) {
     // Default fallback
     togetherRoll(id, "base");
   }
-}
-
-function readFileAsJson(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const json = JSON.parse(e.target.result);
-        resolve(json);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    reader.onerror = () => {
-      reject(new Error("Error reading the file"));
-    };
-    reader.readAsText(file);
-  });
 }
 
 async function togetherRoll(id, api = "openai") {
@@ -1034,17 +981,6 @@ async function openaiChatCompletionsRoll(id) {
   renderTick();
 }
 
-function countCharacters(text) {
-  return text.length;
-}
-
-function countWords(text) {
-  return text
-    .trim()
-    .split(/\s+/)
-    .filter(word => word.length > 0).length;
-}
-
 function updateCounterDisplay(text) {
   const charCount = countCharacters(text);
   const wordCount = countWords(text);
@@ -1134,6 +1070,12 @@ function loadFile() {
       loomTreeRaw = data.loomTree;
       loomTree = Object.assign(new LoomTree(), loomTreeRaw);
       focus = loomTree.nodeStore[data.focus.id];
+
+      // Rebuild search index when tree is reloaded
+      if (window.searchManager && window.searchManager.rebuildIndex) {
+        window.searchManager.rebuildIndex();
+      }
+
       renderTick();
       updateThumbState();
     })

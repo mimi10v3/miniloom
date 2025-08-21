@@ -3,13 +3,13 @@
   "productName": "MiniHF MiniLoom",
   "version": "1.0.0",
   "description": "MiniHF MiniLoom - AI Text Generation Tool",
-  "main": "main.js",
+  "main": "src/main.js",
   "scripts": {
     "start": "electron ."
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "devDependencies": {
     "electron": "^37.2.4",
     "prettier": "^3.6.2"

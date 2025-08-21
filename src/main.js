@@ -14,7 +14,7 @@ let mainWindow;
 function createWindow() {
   mainWindow = new BrowserWindow({
     title: "MiniLoom",
-    icon: path.join(__dirname, "assets/minihf_logo_no_text.png"),
+    icon: path.join(__dirname, "..", "assets/minihf_logo_no_text.png"),
     width: 1200,
     height: 900,
     webPreferences: {
@@ -92,7 +92,7 @@ function createWindow() {
   const newMenu = Menu.buildFromTemplate(existingMenuTemplate);
   Menu.setApplicationMenu(newMenu);
 
-  mainWindow.loadFile("index.html");
+  mainWindow.loadFile("src/index.html");
 
   mainWindow.on("closed", function () {
     mainWindow = null;
@@ -114,7 +114,7 @@ function openSettingsWindow() {
     },
   });
 
-  modal.loadFile("settings.html");
+  modal.loadFile("src/settings.html");
   modal.once("ready-to-show", () => modal.show());
 
   modal.on("closed", () => {
@@ -224,7 +224,9 @@ app
   .then(() => {
     app.setName("MiniLoom");
     if (process.platform === "darwin") {
-      app.dock.setIcon(path.join(__dirname, "assets/minihf_logo_no_text.png"));
+      app.dock.setIcon(
+        path.join(__dirname, "..", "assets/minihf_logo_no_text.png")
+      );
     }
   })
   .then(createWindow);

@@ -66,49 +66,6 @@ function getDefaultSampler() {
   return { ...DEFAULT_SAMPLER };
 }
 
-// From Google AI overview for "node js url validation"
-function isValidUrl(urlString) {
-  try {
-    new URL(urlString);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-function validateFieldStringType(fieldValue, fieldType) {
-  const fieldValueString = String(fieldValue);
-  const intPattern = /^[0-9]+$/;
-  const floatPattern = /^[0-9]+\.?[0-9]*$/;
-  const modelNamePattern = /^[a-zA-Z0-9-\._]+$/;
-  let result;
-  if (fieldType === "intType") {
-    result = fieldValueString.match(intPattern);
-  } else if (fieldType === "floatType") {
-    result = fieldValueString.match(floatPattern);
-  } else if (fieldType === "modelNameType") {
-    result = fieldValueString.match(modelNamePattern);
-  } else if (fieldType === "settingsNameType") {
-    result = fieldValueString.match(modelNamePattern);
-  } else if (fieldType === "URLType") {
-    result = isValidUrl(fieldValue);
-  } else if (fieldType === "select") {
-    // For select elements, just check if it has a value
-    result = fieldValue && fieldValue.length > 0;
-  } else {
-    if (fieldType === "") {
-      console.warn(
-        "Tried to validate empty field type. Did you forget to type your form field?"
-      );
-      result = null;
-    } else {
-      console.warn("Attempted to validate unknown field type");
-      result = null;
-    }
-  }
-  return result;
-}
-
 function loadSettings() {
   return ipcRenderer
     .invoke("load-settings")
@@ -124,18 +81,6 @@ function persistStore() {
   return ipcRenderer
     .invoke("save-settings", samplerSettingsStore)
     .catch(err => console.error("Settings save Error:", err));
-}
-
-function flashSaved(message) {
-  const footer = document.getElementById("footer");
-  footer.textContent = message;
-  footer.className = "footer success";
-
-  // Clear the message after 3 seconds
-  setTimeout(() => {
-    footer.textContent = "";
-    footer.className = "footer";
-  }, 3000);
 }
 
 function getServicesObject() {
