@@ -4,8 +4,32 @@
     <meta charset="UTF-8" />
     <title>Sampler Settings</title>
     <style>
+      :root {
+        --barn-red: #750504ff;
+        --black-olive: #293121ff;
+        --oxford-blue: #142b4fff;
+        --night: #0d0e10ff;
+        --engineering-orange: #d50402ff;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f8f9fa;
+        color: var(--night);
+        height: 100vh;
+        overflow: hidden;
+      }
+
       #settings-pane {
-        width: 25%;
+        width: 100%;
+        height: 100vh;
+        background-color: white;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
 
       #settings-pane form {
@@ -14,70 +38,88 @@
         width: 200px;
       }
 
-      #menu-host {
-        display: flex;
-        flex-direction: column;
-        width: 200px;
-      }
-
-      #menu-host label {
-        margin-top: 1em;
-        margin-bottom: 5px;
-      }
-
       #settings-tabs {
         display: flex;
-        gap: 8px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.15);
-        margin-bottom: 10px;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        padding: 0 16px;
+        margin: 0;
+        height: 40px;
+        align-items: center;
       }
 
-      #settings-tabs .tab-btn {
-        appearance: none;
+      .tab-btn {
+        padding: 6px 12px;
+        background: none;
         border: none;
-        background: transparent;
-        padding: 8px 12px;
         cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        color: #6c757d;
         border-bottom: 2px solid transparent;
-        font-weight: 600;
+        transition: all 0.2s;
+        border-radius: 4px 4px 0 0;
+        margin-right: 4px;
       }
 
-      #settings-tabs .tab-btn.active {
-        border-color: #007aff;
-        color: #007aff;
+      .tab-btn:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+        color: #495057;
+      }
+
+      .tab-btn.active {
+        color: #333;
+        border-bottom-color: #dc3545;
+        background-color: white;
+        font-weight: 600;
       }
 
       /* Small table-ish layout helpers */
       .row {
         display: flex;
-        gap: 8px;
         align-items: center;
-        margin: 6px 0;
+        gap: 10px;
+        margin-bottom: 16px;
       }
       .row label {
-        min-width: 160px;
+        font-weight: 500;
+        color: #333;
+        min-width: 90px;
+        font-size: 14px;
       }
       .divider {
         height: 1px;
-        background: rgba(0, 0, 0, 0.08);
+        background-color: #e9ecef;
         margin: 12px 0;
       }
       .btn {
-        appearance: none;
-        border: 1px solid rgba(0, 0, 0, 0.2);
-        padding: 6px 10px;
-        border-radius: 6px;
+        padding: 6px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+        color: #333;
+        font-size: 13px;
         cursor: pointer;
-        background: #fff;
+        transition: all 0.2s;
+        font-weight: 500;
+      }
+      .btn:hover {
+        background-color: #f8f9fa;
+        border-color: #adb5bd;
       }
       .btn.primary {
-        background: #007aff;
+        background-color: #007bff;
+        border-color: #007bff;
         color: white;
-        border-color: #007aff;
+      }
+      .btn.primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
       }
       .muted {
         opacity: 0.7;
         font-size: 0.9em;
+        color: #666;
       }
       table.keys {
         width: 100%;
@@ -98,63 +140,520 @@
 
       /* Close button styles */
       .close-btn {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        width: 24px;
-        height: 24px;
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        background: none;
         border: none;
-        background: #f0f0f0;
-        border-radius: 50%;
+        font-size: 20px;
         cursor: pointer;
+        color: #666;
+        z-index: 1000;
+        width: 28px;
+        height: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 16px;
-        font-weight: bold;
-        color: #666;
-        z-index: 1000;
+        border-radius: 4px;
+        transition: all 0.2s;
       }
 
       .close-btn:hover {
-        background: #e0e0e0;
+        background-color: rgba(0, 0, 0, 0.08);
         color: #333;
       }
 
       .close-btn:active {
         background: #d0d0d0;
       }
+
+      /* Form field styles */
+      .form-field {
+        margin-bottom: 12px;
+      }
+
+      .form-field label {
+        display: block;
+        margin-bottom: 4px;
+        font-weight: 500;
+        color: #333;
+        font-size: 13px;
+        min-width: 120px;
+      }
+
+      .form-field input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        color: #333;
+        transition: border-color 0.2s;
+        min-width: 300px;
+      }
+
+      .form-field input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      .form-field input:hover {
+        border-color: #adb5bd;
+      }
+
+      .form-field input::placeholder {
+        color: #999;
+      }
+
+      .form-row {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .form-row .form-field {
+        flex: 1;
+        margin-bottom: 0;
+      }
+
+      .form-row label {
+        min-width: 120px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #666;
+      }
+
+      .form-row input,
+      .form-row select {
+        flex: 1;
+        padding: 4px 8px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        font-size: 12px;
+      }
+
+      .form-row input:focus,
+      .form-row select:focus {
+        outline: none;
+        border-color: var(--engineering-orange);
+        box-shadow: 0 0 0 1px rgba(213, 4, 2, 0.2);
+      }
+
+      /* Tab visibility */
+      .tab-content {
+        display: none;
+        flex: 1;
+        padding: 16px 32px;
+        overflow-y: auto;
+      }
+
+      .visible-tab {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .row label {
+        font-weight: 500;
+        color: #333;
+        min-width: 90px;
+        font-size: 14px;
+      }
+
+      .footer {
+        height: 40px;
+        background-color: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        font-size: 13px;
+        color: #666;
+      }
+
+      .footer.success {
+        color: #28a745;
+        background-color: #d4edda;
+        border-top-color: #c3e6cb;
+      }
+
+      .footer.error {
+        color: #dc3545;
+        background-color: #f8d7da;
+        border-top-color: #f5c6cb;
+      }
+
+      /* Tab content styling */
+      .tab-content .row {
+        margin-bottom: 16px;
+      }
+
+      .tab-content .row label {
+        font-weight: 500;
+        color: var(--night);
+        min-width: 100px;
+      }
+
+      .tab-content .row input {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        font-size: 14px;
+        transition: all 0.2s ease;
+      }
+
+      .tab-content .row input:focus {
+        outline: none;
+        border-color: var(--engineering-orange);
+        box-shadow: 0 0 0 2px rgba(213, 4, 2, 0.2);
+      }
+
+      .tab-content .row button {
+        margin-left: 8px;
+      }
+
+      /* Form actions */
+      .form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid #e9ecef;
+      }
+
+      .form-actions .btn {
+        min-width: 80px;
+      }
+
+      /* Form field improvements */
+      .form-field {
+        margin-bottom: 16px;
+      }
+
+      .form-field label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--night);
+      }
+
+      .form-field input,
+      .form-field select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+      }
+
+      .form-field input:focus,
+      .form-field select:focus {
+        outline: none;
+        border-color: var(--engineering-orange);
+        box-shadow: 0 0 0 2px rgba(213, 4, 2, 0.2);
+      }
+
+      .form-field input::placeholder {
+        color: #999;
+      }
+
+      select {
+        flex: 1;
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+        font-size: 14px;
+        color: #333;
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+
+      select:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      select:hover {
+        border-color: #adb5bd;
+      }
+
+      /* API Keys table styling */
+      table.keys {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      table.keys th,
+      table.keys td {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        padding: 12px 8px;
+        text-align: left;
+        font-family: inherit;
+      }
+      table.keys th {
+        font-weight: 600;
+        color: var(--night);
+        background-color: #f8f9fa;
+      }
+      table.keys td {
+        color: var(--night);
+      }
+      .mono {
+        font-family: inherit;
+      }
     </style>
   </head>
   <body>
     <button class="close-btn" id="close-settings">×</button>
-    <div id="settings-tabs">
-      <button class="tab-btn active" data-tab="sampler-settings">
-        Sampler Settings
-      </button>
-      <button class="tab-btn" data-tab="api-keys">API Keys</button>
-    </div>
     <div id="settings-pane">
-      <form id="sampler-settings">
-        <label id="sampler-label" for="sampler">Sampling Method</label>
-        <select id="sampler">
-          <option value="openai">OpenAI Completions</option>
-          <option value="openai-chat">OpenAI Chat Completions</option>
-          <option value="openrouter">OpenRouter API</option>
-          <option value="together">Together API</option>
-        </select>
-        <div id="menu-host"></div>
-      </form>
-      <script src="sampler-settings.js"></script>
+      <div id="settings-tabs">
+        <button class="tab-btn active" data-tab="services">🌐 Services</button>
+        <button class="tab-btn" data-tab="samplers">🎲 Samplers</button>
+        <button class="tab-btn" data-tab="api-keys">🔑 API Keys</button>
+      </div>
+
+      <!-- Services Tab -->
+      <div id="services-tab" class="tab-content visible-tab">
+        <!-- Services Selection and Add -->
+        <div class="row">
+          <label for="service-select">Select Service:</label>
+          <select id="service-select">
+            <option value="">-- Select a service --</option>
+          </select>
+          <button class="btn primary" id="add-service-btn">Add New</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Services Form -->
+        <form id="services-form" style="display: none">
+          <div class="form-field">
+            <label for="service-name">Service Name</label>
+            <input
+              type="text"
+              id="service-name"
+              class="modelNameType"
+              placeholder="e.g. My OpenAI"
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="sampling-method">Sampling Method</label>
+            <select id="sampling-method">
+              <option value="openai">OpenAI Completions</option>
+              <option value="openai-chat">OpenAI Chat Completions</option>
+              <option value="openrouter">OpenRouter API</option>
+              <option value="together">Together API</option>
+              <option value="base">Custom</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="service-api-url">API URL</label>
+            <input
+              type="text"
+              id="service-api-url"
+              class="URLType"
+              placeholder="https://api.openai.com/"
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="service-model-name">Model Name</label>
+            <input
+              type="text"
+              id="service-model-name"
+              class="modelNameType"
+              placeholder="gpt-4"
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="service-api-delay">API Delay (milliseconds)</label>
+            <input
+              type="text"
+              id="service-api-delay"
+              class="intType"
+              placeholder="3000"
+            />
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn"
+              id="delete-service-btn"
+              style="display: none"
+            >
+              Delete
+            </button>
+            <button type="button" class="btn" id="cancel-service-btn">
+              Cancel
+            </button>
+            <button type="button" class="btn primary" id="save-service-btn">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Samplers Tab -->
+      <div id="samplers-tab" class="tab-content">
+        <!-- Samplers Selection and Add -->
+        <div class="row">
+          <label for="sampler-select">Select Sampler:</label>
+          <select id="sampler-select">
+            <option value="">-- Select a sampler --</option>
+          </select>
+          <button class="btn primary" id="add-sampler-btn">Add New</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Samplers Form -->
+        <form id="samplers-form" style="display: none">
+          <div class="form-field">
+            <label for="sampler-name">Sampler Name</label>
+            <input
+              type="text"
+              id="sampler-name"
+              class="modelNameType"
+              placeholder="e.g. Creative Writing"
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="output-branches">Output Branches</label>
+              <input
+                type="text"
+                id="output-branches"
+                class="intType"
+                placeholder="2"
+              />
+            </div>
+            <div class="form-field">
+              <label for="temperature">Temperature</label>
+              <input
+                type="text"
+                id="temperature"
+                class="floatType"
+                placeholder="0.9"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="tokens-per-branch">Tokens Per Branch</label>
+              <input
+                type="text"
+                id="tokens-per-branch"
+                class="intType"
+                placeholder="256"
+              />
+            </div>
+            <div class="form-field">
+              <label for="top-p">Top-P</label>
+              <input type="text" id="top-p" class="floatType" placeholder="1" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="top-k">Top-K</label>
+              <input type="text" id="top-k" class="intType" placeholder="100" />
+            </div>
+            <div class="form-field">
+              <label for="repetition-penalty">Repetition Penalty</label>
+              <input
+                type="text"
+                id="repetition-penalty"
+                class="floatType"
+                placeholder="1"
+              />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn"
+              id="delete-sampler-btn"
+              style="display: none"
+            >
+              Delete
+            </button>
+            <button type="button" class="btn" id="cancel-sampler-btn">
+              Cancel
+            </button>
+            <button type="button" class="btn primary" id="save-sampler-btn">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- API Keys Tab -->
+      <div id="api-keys-tab" class="tab-content">
+        <!-- Add Key Form -->
+        <div class="row">
+          <label for="key-label">Key Name</label>
+          <input
+            type="text"
+            id="key-label"
+            class="modelNameType"
+            placeholder="e.g. OPENAI"
+          />
+          <label for="key-value" style="margin-left: 12px">Secret</label>
+          <input
+            type="password"
+            id="key-value"
+            placeholder="paste your API key"
+          />
+          <button class="btn primary" id="add-key-btn">Add</button>
+        </div>
+
+        <div class="muted" style="margin-top: 6px">
+          Names allow A–Z, a–z, 0–9, dash, underscore, and dot.
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Keys Table -->
+        <table class="keys mono">
+          <thead>
+            <tr>
+              <th style="width: 22%">Name</th>
+              <th>Secret</th>
+              <th style="width: 150px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="keys-tbody">
+            <tr>
+              <td colspan="3" class="muted">No API keys saved.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-    <script>
-      // Handle close button click
-      document
-        .getElementById("close-settings")
-        .addEventListener("click", () => {
-          const { ipcRenderer } = require("electron");
-          ipcRenderer.send("close-settings-window");
-        });
-    </script>
+
+    <div class="footer" id="footer"></div>
+    <script src="sampler-settings.js"></script>
   </body>
 </html>

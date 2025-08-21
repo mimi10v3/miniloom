@@ -262,58 +262,9 @@ function renderTick() {
   branchControlButtonsDiv.append(leftThumbSpan, rightThumbSpan);
 
   // TODO: re-enable or remove this feature
-  if (focus.type === "gen") {
-    const rewriteButton = document.createElement("span");
-    rewriteButton.id = "rewrite-button";
-    rewriteButton.textContent = "💬";
-    rewriteButton.onclick = () => promptRewriteNode(focus.id);
+  if (focus.type === "user") {
     //    branchControlButtonsDiv.append(rewriteButton);
   }
-  const samplerSelect = document.createElement("select");
-  samplerSelect.id = "sampler-name";
-  const samplerOptionOpenAIComp = document.createElement("option");
-  samplerOptionOpenAIComp.value = "openai";
-  samplerOptionOpenAIComp.text = "OpenAI Completions";
-  const samplerOptionOpenAIChat = document.createElement("option");
-  samplerOptionOpenAIChat.value = "openai-chat";
-  samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
-  const samplerOptionOpenRouter = document.createElement("option");
-  samplerOptionOpenRouter.value = "openrouter";
-  samplerOptionOpenRouter.text = "OpenRouter API";
-  const samplerOptionTogether = document.createElement("option");
-  samplerOptionTogether.value = "together";
-  samplerOptionTogether.text = "Together API";
-  samplerSelect.append(samplerOptionOpenAIComp);
-  samplerSelect.append(samplerOptionOpenAIChat);
-  samplerSelect.append(samplerOptionOpenRouter);
-  samplerSelect.append(samplerOptionTogether);
-  branchControlButtonsDiv.append(samplerSelect);
-
-  const samplerPresets = document.createElement("select");
-  samplerPresets.id = "sampler-preset-name";
-  if (samplerSettingsStore && samplerSettingsStore["sampler-settings"]) {
-    for (let samplerPresetName of Object.keys(
-      samplerSettingsStore["sampler-settings"]
-    )) {
-      const samplerPresetOption = document.createElement("option");
-      samplerPresetOption.value = samplerPresetName;
-      samplerPresetOption.text = samplerPresetName;
-      samplerPresets.append(samplerPresetOption);
-    }
-  }
-  branchControlButtonsDiv.append(samplerPresets);
-
-  const apiKeySelect = document.createElement("select");
-  apiKeySelect.id = "api-key-name";
-  if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
-    for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
-      const apiKeyOption = document.createElement("option");
-      apiKeyOption.value = apiKeyName;
-      apiKeyOption.text = apiKeyName;
-      apiKeySelect.append(apiKeyOption);
-    }
-  }
-  branchControlButtonsDiv.append(apiKeySelect);
 
   // Generate button is now in HTML, just update its click handler
   const generateButton = document.getElementById("generate-button");
@@ -375,94 +326,76 @@ function changeFocus(newFocusId) {
 }
 
 function prepareRollParams() {
-  const sampler = document.getElementById("sampler-name");
-  const presetName = document.getElementById("sampler-preset-name");
-  const apiKeyName = document.getElementById("api-key-name");
+  const serviceSelector = document.getElementById("service-selector");
+  const samplerSelector = document.getElementById("sampler-selector");
+  const apiKeySelector = document.getElementById("api-key-selector");
 
-  // Handle null/undefined sampler settings
-  const preset =
+  // Get selected service, sampler, and API key
+  const selectedServiceName = serviceSelector ? serviceSelector.value : "";
+  const selectedSamplerName = samplerSelector ? samplerSelector.value : "";
+  const selectedApiKeyName = apiKeySelector ? apiKeySelector.value : "";
+
+  // Get service data
+  let serviceData = {};
+  if (
+    selectedServiceName &&
     samplerSettingsStore &&
-    samplerSettingsStore["sampler-settings"] &&
-    presetName.value &&
-    samplerSettingsStore["sampler-settings"][presetName.value]
-      ? samplerSettingsStore["sampler-settings"][presetName.value]
-      : {};
+    samplerSettingsStore.services
+  ) {
+    serviceData = samplerSettingsStore.services[selectedServiceName] || {};
+  }
 
-  const apiKey =
+  // Get sampler data
+  let samplerData = {};
+  if (
+    selectedSamplerName &&
     samplerSettingsStore &&
-    samplerSettingsStore["api-keys"] &&
-    apiKeyName.value &&
-    samplerSettingsStore["api-keys"][apiKeyName.value]
-      ? samplerSettingsStore["api-keys"][apiKeyName.value]
-      : "";
-  let apiUrl;
-  if ("api-url" in preset) {
-    apiUrl = preset["api-url"]["value"];
-  } else {
-    apiUrl = "";
-  }
-  let outputBranches;
-  if ("output-branches" in preset) {
-    outputBranches = preset["output-branches"]["value"];
-  } else {
-    outputBranches = 2;
-  }
-  let tokensPerBranch;
-  if ("tokens-per-branch" in preset) {
-    tokensPerBranch = preset["tokens-per-branch"]["value"];
-  } else {
-    tokensPerBranch = 256;
-  }
-  let temperature;
-  if ("temperature" in preset) {
-    temperature = preset["temperature"]["value"];
-  } else {
-    temperature = 0.9;
-  }
-  let topP;
-  if ("top-p" in preset) {
-    topP = preset["top-p"]["value"];
-  } else {
-    topP = 1;
-  }
-  let topK;
-  if ("top-k" in preset) {
-    topK = preset["top-k"]["value"];
-  } else {
-    topK = 100;
-  }
-  let repetitionPenalty;
-  if ("repetition-penalty" in preset) {
-    repetitionPenalty = preset["repetition-penalty"]["value"];
-  } else {
-    repetitionPenalty = 1;
-  }
-  let apiDelay;
-  if ("api-delay" in preset) {
-    apiDelay = preset["api-delay"]["value"];
-  } else {
-    apiDelay = 3000;
-  }
-  let modelName;
-  if ("model-name" in preset) {
-    modelName = preset["model-name"]["value"];
-  } else {
-    modelName = "";
+    samplerSettingsStore.samplers
+  ) {
+    samplerData = samplerSettingsStore.samplers[selectedSamplerName] || {};
   }
 
-  return {
-    sampler: sampler.value,
-    "api-url": apiUrl,
-    "output-branches": outputBranches,
-    "tokens-per-branch": tokensPerBranch,
-    temperature: temperature,
-    "top-p": topP,
-    "top-k": topK,
-    "repetition-penalty": repetitionPenalty,
-    "api-delay": apiDelay,
-    "model-name": modelName,
+  // Get API key
+  let apiKey = "";
+  if (
+    selectedApiKeyName &&
+    samplerSettingsStore &&
+    samplerSettingsStore["api-keys"]
+  ) {
+    apiKey = samplerSettingsStore["api-keys"][selectedApiKeyName] || "";
+  }
+
+  const params = {
+    // Service parameters
+    "sampling-method": serviceData["sampling-method"] || "base",
+    "api-url": serviceData["service-api-url"] || "",
+    "model-name": serviceData["service-model-name"] || "",
+    "api-delay": parseInt(serviceData["service-api-delay"]) || 3000,
     "api-key": apiKey,
+
+    // Sampler parameters
+    "output-branches": parseInt(samplerData["output-branches"]) || 2,
+    "tokens-per-branch": parseInt(samplerData["tokens-per-branch"]) || 256,
+    temperature: parseFloat(samplerData["temperature"]) || 0.9,
+    "top-p": parseFloat(samplerData["top-p"]) || 1,
+    "top-k": parseInt(samplerData["top-k"]) || 100,
+    "repetition-penalty": parseFloat(samplerData["repetition-penalty"]) || 1,
   };
+
+  // Debug logging
+  console.log("prepareRollParams:", {
+    selectedServiceName,
+    selectedSamplerName,
+    selectedApiKeyName,
+    apiKey: apiKey ? "***" : "EMPTY",
+    apiUrl: params["api-url"],
+    modelName: params["model-name"],
+    serviceData,
+    samplerData,
+    samplerSettingsStore: samplerSettingsStore ? "exists" : "null",
+  });
+
+  return params;
 }
 
 async function getResponses(
@@ -522,7 +455,7 @@ async function getSummary(taskText) {
   // TODO: Flip this case around
   if (
     !["together", "openrouter", "openai", "openai-chat"].includes(
-      params["sampler"]
+      params["sampling-method"]
     )
   ) {
     r = await fetch(endpoint + "generate", {
@@ -548,7 +481,7 @@ async function getSummary(taskText) {
       .join(" ");
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
-  else if (params["sampler"] == "openai-chat") {
+  else if (params["sampling-method"] == "openai-chat") {
     r = await fetch(endpoint, {
       method: "POST",
       body: JSON.stringify({
@@ -583,7 +516,7 @@ async function getSummary(taskText) {
       repetition_penalty: params["repetition-penalty"],
     };
     let batch;
-    if (params["sampler"] === "openai") {
+    if (params["sampling-method"] === "openai") {
       batch = await togetherGetResponses({
         endpoint: endpoint,
         prompt: prompt,
@@ -741,20 +674,13 @@ function promptThumbsDown(id) {
 function updateThumbState() {
   const thumbUp = document.getElementById("thumb-up");
   const thumbDown = document.getElementById("thumb-down");
-
-  console.log("updateThumbState called, focus.rating:", focus.rating);
-  console.log("Found thumbs:", thumbUp, thumbDown);
-
   if (thumbUp && thumbDown) {
     thumbUp.classList.remove("chosen");
     thumbDown.classList.remove("chosen");
-
     if (focus.rating === true) {
       thumbUp.classList.add("chosen");
-      console.log("Added chosen to thumb up");
     } else if (focus.rating === false) {
       thumbDown.classList.add("chosen");
-      console.log("Added chosen to thumb down");
     }
   }
 }
@@ -788,6 +714,16 @@ async function togetherGetResponses({
   const tp = togetherParams;
   const auth_token = "Bearer " + tp["api-key"];
   const apiDelay = Number(tp["delay"]);
+
+  // Debug logging
+  console.log("togetherGetResponses called with:", {
+    endpoint,
+    api,
+    auth_token: tp["api-key"] ? "Bearer ***" : "NO API KEY",
+    model: tp["model-name"],
+    prompt_length: prompt.length,
+  });
+
   let batch_promises = [];
   // Together doesn't let you get more than one completion at a time
   // But OpenAI expects you to use the n parameter
@@ -807,6 +743,10 @@ async function togetherGetResponses({
       body["provider"] = {};
       body["provider"]["require_parameters"] = true;
     }
+
+    console.log("Making API request to:", endpoint);
+    console.log("Request body:", body);
+
     const promise = delay(apiDelay * i)
       .then(async () => {
         let r = await fetch(endpoint, {
@@ -818,9 +758,23 @@ async function togetherGetResponses({
             Authorization: auth_token,
           },
         });
+
+        console.log("API response status:", r.status);
+        console.log(
+          "API response headers:",
+          Object.fromEntries(r.headers.entries())
+        );
+
+        if (!r.ok) {
+          const errorText = await r.text();
+          console.error("API error response:", errorText);
+          throw new Error(`API request failed: ${r.status} ${r.statusText}`);
+        }
+
         return r.json();
       })
       .then(response_json => {
+        console.log("API response JSON:", response_json);
         let outs = [];
         let choices_length;
         if (api === "openai") {
@@ -868,18 +822,23 @@ async function togetherGetResponses({
 
 async function reroll(id, weave = true) {
   const params = prepareRollParams();
-  if (params["sampler"] === "base") {
-    baseRoll(id, weave);
-  } else if (params["sampler"] === "vae-guided") {
-    await vaeGuidedRoll(id);
-  } else if (params["sampler"] === "together") {
-    togetherRoll(id, (api = "together"));
-  } else if (params["sampler"] === "openrouter") {
-    togetherRoll(id, (api = "openrouter"));
-  } else if (params["sampler"] === "openai") {
-    togetherRoll(id, (api = "openai"));
-  } else if (params["sampler"] === "openai-chat") {
+  if (params["sampling-method"] === "base") {
+    // Use togetherRoll for base method
+    togetherRoll(id, "base");
+  } else if (params["sampling-method"] === "vae-guided") {
+    // vae-guided not implemented, fall back to base
+    togetherRoll(id, "base");
+  } else if (params["sampling-method"] === "together") {
+    togetherRoll(id, "together");
+  } else if (params["sampling-method"] === "openrouter") {
+    togetherRoll(id, "openrouter");
+  } else if (params["sampling-method"] === "openai") {
+    togetherRoll(id, "openai");
+  } else if (params["sampling-method"] === "openai-chat") {
     await openaiChatCompletionsRoll(id);
+  } else {
+    // Default fallback
+    togetherRoll(id, "base");
   }
 }
 
@@ -1135,7 +1094,7 @@ editor.addEventListener("keydown", async e => {
         "vae-guided",
         "vae-paragraph",
         "vae-bridge",
-      ].includes(params["sampler"]) &&
+      ].includes(params["sampling-method"]) &&
       !updatingNode
     ) {
       try {
@@ -1217,14 +1176,21 @@ Created: ${formattedTime}`;
   }
 });
 const onSettingsUpdated = async () => {
-  samplerSettingsStore = ipcRenderer
-    .invoke("load-settings")
-    .then(data => {
-      if (data != null) {
-        samplerSettingsStore = data;
-      }
-    })
-    .catch(err => console.error("Load Settings Error:", err));
+  try {
+    const data = await ipcRenderer.invoke("load-settings");
+    if (data != null) {
+      samplerSettingsStore = data;
+      console.log("Settings updated, new data:", data);
+      // Refresh the selectors with new data
+      populateServiceSelector();
+      populateSamplerSelector();
+      populateApiKeySelector();
+    } else {
+      console.log("Settings update returned null data");
+    }
+  } catch (err) {
+    console.error("Load Settings Error:", err);
+  }
 };
 
 // attach once on startup
@@ -1297,6 +1263,11 @@ function loadSettings() {
 async function init() {
   await loadSettings();
 
+  // Populate the new Services and Samplers selectors
+  populateServiceSelector();
+  populateSamplerSelector();
+  populateApiKeySelector();
+
   // Add click handlers to thumbs
   const thumbUp = document.getElementById("thumb-up");
   const thumbDown = document.getElementById("thumb-down");
@@ -1312,6 +1283,106 @@ async function init() {
 
   // Update initial thumb state
   updateThumbState();
+}
+
+function populateServiceSelector() {
+  const serviceSelector = document.getElementById("service-selector");
+  if (!serviceSelector) return;
+
+  // Remember current selection
+  const currentSelection = serviceSelector.value;
+  console.log("populateServiceSelector - currentSelection:", currentSelection);
+
+  // Clear existing options except the first one
+  serviceSelector.innerHTML =
+    '<option value="">-- Select a service --</option>';
+
+  if (samplerSettingsStore && samplerSettingsStore.services) {
+    const services = Object.keys(samplerSettingsStore.services);
+    console.log("Available services:", services);
+    services.forEach(serviceName => {
+      const option = document.createElement("option");
+      option.value = serviceName;
+      option.textContent = serviceName;
+      serviceSelector.appendChild(option);
+    });
+  }
+
+  // Restore selection if it still exists
+  if (
+    currentSelection &&
+    samplerSettingsStore &&
+    samplerSettingsStore.services &&
+    samplerSettingsStore.services[currentSelection]
+  ) {
+    serviceSelector.value = currentSelection;
+    console.log("Restored service selection to:", currentSelection);
+  } else {
+    console.log("Could not restore service selection:", currentSelection);
+  }
+}
+
+function populateSamplerSelector() {
+  const samplerSelector = document.getElementById("sampler-selector");
+  if (!samplerSelector) return;
+
+  // Remember current selection
+  const currentSelection = samplerSelector.value;
+
+  // Clear existing options except the first one
+  samplerSelector.innerHTML =
+    '<option value="">-- Select a sampler --</option>';
+
+  if (samplerSettingsStore && samplerSettingsStore.samplers) {
+    const samplers = Object.keys(samplerSettingsStore.samplers);
+    samplers.forEach(samplerName => {
+      const option = document.createElement("option");
+      option.value = samplerName;
+      option.textContent = samplerName;
+      samplerSelector.appendChild(option);
+    });
+  }
+
+  // Restore selection if it still exists
+  if (
+    currentSelection &&
+    samplerSettingsStore &&
+    samplerSettingsStore.samplers &&
+    samplerSettingsStore.samplers[currentSelection]
+  ) {
+    samplerSelector.value = currentSelection;
+  }
+}
+
+function populateApiKeySelector() {
+  const apiKeySelector = document.getElementById("api-key-selector");
+  if (!apiKeySelector) return;
+
+  // Remember current selection
+  const currentSelection = apiKeySelector.value;
+
+  // Clear existing options except the first one
+  apiKeySelector.innerHTML = '<option value="">-- Select API key --</option>';
+
+  if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
+    const apiKeys = Object.keys(samplerSettingsStore["api-keys"]);
+    apiKeys.forEach(apiKeyName => {
+      const option = document.createElement("option");
+      option.value = apiKeyName;
+      option.textContent = apiKeyName;
+      apiKeySelector.appendChild(option);
+    });
+  }
+
+  // Restore selection if it still exists
+  if (
+    currentSelection &&
+    samplerSettingsStore &&
+    samplerSettingsStore["api-keys"] &&
+    samplerSettingsStore["api-keys"][currentSelection]
+  ) {
+    apiKeySelector.value = currentSelection;
+  }
 }
 init();
 updateCounterDisplay(editor.value || "");

@@ -570,66 +570,11 @@ window.renderTick = function () {
     //    branchControlButtonsDiv.append(rewriteButton);
   }
 
-  const genControls = document.createElement("div");
-  genControls.id = "gen-controls";
-
-  const dropdownsRow = document.createElement("div");
-  dropdownsRow.classList.add("dropdowns-row");
-
-  const samplerSelect = document.createElement("select");
-  samplerSelect.id = "sampler-name";
-  const samplerOptionOpenAIComp = document.createElement("option");
-  samplerOptionOpenAIComp.value = "openai";
-  samplerOptionOpenAIComp.text = "OpenAI Completions";
-  const samplerOptionOpenAIChat = document.createElement("option");
-  samplerOptionOpenAIChat.value = "openai-chat";
-  samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
-  const samplerOptionOpenRouter = document.createElement("option");
-  samplerOptionOpenRouter.value = "openrouter";
-  samplerOptionOpenRouter.text = "OpenRouter API";
-  const samplerOptionTogether = document.createElement("option");
-  samplerOptionTogether.value = "together";
-  samplerOptionTogether.text = "Together API";
-  samplerSelect.append(samplerOptionOpenAIComp);
-  samplerSelect.append(samplerOptionOpenAIChat);
-  samplerSelect.append(samplerOptionOpenRouter);
-  samplerSelect.append(samplerOptionTogether);
-  dropdownsRow.append(samplerSelect);
-
-  const samplerPresets = document.createElement("select");
-  samplerPresets.id = "sampler-preset-name";
-  if (samplerSettingsStore && samplerSettingsStore["sampler-settings"]) {
-    for (let samplerPresetName of Object.keys(
-      samplerSettingsStore["sampler-settings"]
-    )) {
-      const samplerPresetOption = document.createElement("option");
-      samplerPresetOption.value = samplerPresetName;
-      samplerPresetOption.text = samplerPresetName;
-      samplerPresets.append(samplerPresetOption);
-    }
-  }
-  dropdownsRow.append(samplerPresets);
-
-  const apiKeys = document.createElement("select");
-  apiKeys.id = "api-key-name";
-  if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
-    for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
-      const apiKeyOption = document.createElement("option");
-      apiKeyOption.value = apiKeyName;
-      apiKeyOption.text = apiKeyName;
-      apiKeys.append(apiKeyOption);
-    }
-  }
-  dropdownsRow.append(apiKeys);
-
-  // Enhance the existing generate button
+  // Generate button is now in HTML, just update its click handler
   const generateButton = document.getElementById("generate-button");
   if (generateButton) {
     generateButton.onclick = () => reroll(focus.id, false);
   }
-
-  genControls.append(dropdownsRow);
-  branchControlButtonsDiv.append(genControls);
 
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");

@@ -1,208 +1,69 @@
-// TODO: Use a preload
 const { ipcRenderer } = require("electron");
-const samplerOptionMenu = document.getElementById("menu-host");
-const menuHost = samplerOptionMenu;
+
+const servicesTab = document.getElementById("services-tab");
+const samplersTab = document.getElementById("samplers-tab");
+const apiKeysTab = document.getElementById("api-keys-tab");
+
+const servicesForm = document.getElementById("services-form");
+const samplersForm = document.getElementById("samplers-form");
+const serviceSelect = document.getElementById("service-select");
+const samplerSelect = document.getElementById("sampler-select");
+
+const SERVICE_DEFAULTS = {
+  base: {
+    "sampling-method": "base",
+    "service-api-url": "http://localhost:5000/",
+    "service-model-name": "togethercomputer/llama-2-70b",
+    "service-api-delay": "3000",
+  },
+  together: {
+    "sampling-method": "together",
+    "service-api-url": "https://api.together.xyz/inference",
+    "service-model-name": "togethercomputer/llama-2-70b",
+    "service-api-delay": "3000",
+  },
+  openrouter: {
+    "sampling-method": "openrouter",
+    "service-api-url": "https://openrouter.ai/api/v1/completions",
+    "service-model-name": "deepseek/deepseek-v3-base:free",
+    "service-api-delay": "3000",
+  },
+  openai: {
+    "sampling-method": "openai",
+    "service-api-url": "https://api.openai.com/",
+    "service-model-name": "code-davinci-002",
+    "service-api-delay": "3000",
+  },
+  "openai-chat": {
+    "sampling-method": "openai-chat",
+    "service-api-url": "https://api.openai.com/v1/chat/completions",
+    "service-model-name": "gpt-5",
+    "service-api-delay": "3000",
+  },
+};
+
+const DEFAULT_SAMPLER = {
+  "output-branches": "2",
+  "tokens-per-branch": "256",
+  temperature: "0.9",
+  "top-p": "1",
+  "top-k": "100",
+  "repetition-penalty": "1",
+};
+
 let samplerSettingsStore = {};
+let currentEditingService = null;
+let currentEditingSampler = null;
+let originalServiceData = null;
+let originalSamplerData = null;
 
-function baseSamplerMenu() {
-  samplerOptionMenu.innerHTML = "";
-
-  const settingsNameLabel = document.createElement("label");
-  settingsNameLabel.for = "setting-settings-name";
-  settingsNameLabel.textContent = "Settings Name";
-  const settingsName = document.createElement("input");
-  settingsName.type = "text";
-  settingsName.id = "setting-settings-name";
-  settingsName.name = "setting-settings-name";
-  settingsName.classList.add("settingsNameType");
-  settingsName.value = "Default";
-
-  const apiUrlLabel = document.createElement("label");
-  apiUrlLabel.for = "api-url";
-  apiUrlLabel.textContent = "API URL";
-  const apiUrl = document.createElement("input");
-  apiUrl.type = "text";
-  apiUrl.id = "api-url";
-  apiUrl.name = "api-url";
-  apiUrl.classList.add("URLType");
-  apiUrl.value = "http://localhost:5000/";
-
-  const outputBranchesLabel = document.createElement("label");
-  outputBranchesLabel.for = "output-branches";
-  outputBranchesLabel.classList.add("first-sampler-menu-item");
-  outputBranchesLabel.textContent = "Output Branches";
-  const outputBranches = document.createElement("input");
-  outputBranches.type = "text";
-  outputBranches.id = "output-branches";
-  outputBranches.name = "output-branches";
-  outputBranches.classList.add("intType");
-  outputBranches.value = "2";
-
-  const tokensPerBranchLabel = document.createElement("label");
-  tokensPerBranchLabel.for = "tokens-per-branch";
-  tokensPerBranchLabel.textContent = "Tokens Per Branch";
-  const tokensPerBranch = document.createElement("input");
-  tokensPerBranch.type = "text";
-  tokensPerBranch.id = "tokens-per-branch";
-  tokensPerBranch.name = "tokens-per-branch";
-  tokensPerBranch.classList.add("intType");
-  tokensPerBranch.value = "256";
-
-  const temperatureLabel = document.createElement("label");
-  temperatureLabel.for = "temperature";
-  temperatureLabel.textContent = "Temperature";
-  const temperature = document.createElement("input");
-  temperature.type = "text";
-  temperature.id = "temperature";
-  temperature.name = "temperature";
-  temperature.classList.add("floatType");
-  temperature.value = "0.9";
-
-  const topPLabel = document.createElement("label");
-  topPLabel.for = "top-p";
-  topPLabel.textContent = "Top-P";
-  const topP = document.createElement("input");
-  topP.type = "text";
-  topP.id = "top-p";
-  topP.name = "top-p";
-  topP.classList.add("floatType");
-  topP.value = "1";
-
-  const topKLabel = document.createElement("label");
-  topKLabel.for = "top-k";
-  topKLabel.textContent = "Top-K";
-  const topK = document.createElement("input");
-  topK.type = "text";
-  topK.id = "top-k";
-  topK.name = "top-k";
-  topK.classList.add("intType");
-  topK.value = "100";
-
-  const repetitionPenaltyLabel = document.createElement("label");
-  repetitionPenaltyLabel.for = "repetition-penalty";
-  repetitionPenaltyLabel.textContent = "Repetition Penalty";
-  const repetitionPenalty = document.createElement("input");
-  repetitionPenalty.type = "text";
-  repetitionPenalty.id = "repetition-penalty";
-  repetitionPenalty.name = "repetition-penalty";
-  repetitionPenalty.classList.add("floatType");
-  repetitionPenalty.value = "1";
-
-  const apiDelayLabel = document.createElement("label");
-  apiDelayLabel.for = "api-delay";
-  apiDelayLabel.textContent = "API Delay (milliseconds)";
-  const apiDelay = document.createElement("input");
-  apiDelay.type = "text";
-  apiDelay.id = "api-delay";
-  apiDelay.name = "api-delay";
-  apiDelay.classList.add("intType");
-  apiDelay.value = 3000;
-
-  const modelNameLabel = document.createElement("label");
-  modelNameLabel.for = "model-name";
-  modelNameLabel.textContent = "Model Name";
-  const modelName = document.createElement("input");
-  modelName.type = "text";
-  modelName.id = "model-name";
-  modelName.name = "model-name";
-  modelName.classList.add("modelNameType");
-  modelName.value = "togethercomputer/llama-2-70b";
-
-  samplerOptionMenu.append(settingsNameLabel);
-  samplerOptionMenu.append(settingsName);
-  samplerOptionMenu.append(apiUrlLabel);
-  samplerOptionMenu.append(apiUrl);
-  samplerOptionMenu.append(outputBranchesLabel);
-  samplerOptionMenu.append(outputBranches);
-  samplerOptionMenu.append(tokensPerBranchLabel);
-  samplerOptionMenu.append(tokensPerBranch);
-  samplerOptionMenu.append(temperatureLabel);
-  samplerOptionMenu.append(temperature);
-  samplerOptionMenu.append(topPLabel);
-  samplerOptionMenu.append(topP);
-  samplerOptionMenu.append(topKLabel);
-  samplerOptionMenu.append(topK);
-  samplerOptionMenu.append(repetitionPenaltyLabel);
-  samplerOptionMenu.append(repetitionPenalty);
-  samplerOptionMenu.append(apiDelayLabel);
-  samplerOptionMenu.append(apiDelay);
-  samplerOptionMenu.append(modelNameLabel);
-  samplerOptionMenu.append(modelName);
+function applyServiceDefaults(serviceType) {
+  const defaults = SERVICE_DEFAULTS[serviceType] || SERVICE_DEFAULTS.base;
+  return defaults;
 }
 
-function togetherSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://api.together.xyz/inference";
-  const topP = document.getElementById("top-p");
-  topP.value = "1";
-  const topK = document.getElementById("top-k");
-  topK.value = "100";
-  const repetitionPenalty = document.getElementById("repetition-penalty");
-  repetitionPenalty.value = "1";
-  const apiDelay = document.getElementById("api-delay");
-  apiDelay.value = 3000;
-  const modelName = document.getElementById("model-name");
-  modelName.value = "togethercomputer/llama-2-70b";
-}
-
-function openrouterSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://openrouter.ai/api/v1/chat/completions";
-  const topP = document.getElementById("top-p");
-  topP.value = "1";
-  const topK = document.getElementById("top-k");
-  topK.value = "100";
-  const repetitionPenalty = document.getElementById("repetition-penalty");
-  repetitionPenalty.value = "1";
-  const apiDelay = document.getElementById("api-delay");
-  apiDelay.value = 3000;
-  const modelName = document.getElementById("model-name");
-  modelName.value = "deepseek/deepseek-v3-base:free";
-}
-
-function openaiCompletionsSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://api.openai.com/";
-  const topP = document.getElementById("top-p");
-  topP.value = "1";
-  const topK = document.getElementById("top-k");
-  topK.value = "100";
-  const repetitionPenalty = document.getElementById("repetition-penalty");
-  repetitionPenalty.value = "1";
-  const apiDelay = document.getElementById("api-delay");
-  apiDelay.value = 3000;
-  const modelName = document.getElementById("model-name");
-  modelName.value = "code-davinci-002";
-}
-
-// Add this function for the OpenAI Chat Completions sampler menu
-function openaiChatCompletionsSamplerMenu() {
-  baseSamplerMenu();
-  const apiUrl = document.getElementById("api-url");
-  apiUrl.value = "https://api.openai.com/v1/chat/completions";
-  const topP = document.getElementById("top-p");
-  topP.value = "1";
-  const topK = document.getElementById("top-k");
-  topK.value = "100";
-  const repetitionPenalty = document.getElementById("repetition-penalty");
-  repetitionPenalty.value = "1";
-  const apiDelay = document.getElementById("api-delay");
-  apiDelay.value = 3000;
-  const modelName = document.getElementById("model-name");
-  modelName.value = "gpt-5";
-}
-
-function samplerMenuToDict() {
-  const out = {};
-  for (let child of samplerOptionMenu.children) {
-    if (child.tagName === "INPUT" && child.id !== "setting-api-key") {
-      out[child.id] = { value: child.value, type: child.className };
-    }
-  }
-  return out;
+function getDefaultSampler() {
+  return { ...DEFAULT_SAMPLER };
 }
 
 // From Google AI overview for "node js url validation"
@@ -231,6 +92,9 @@ function validateFieldStringType(fieldValue, fieldType) {
     result = fieldValueString.match(modelNamePattern);
   } else if (fieldType === "URLType") {
     result = isValidUrl(fieldValue);
+  } else if (fieldType === "select") {
+    // For select elements, just check if it has a value
+    result = fieldValue && fieldValue.length > 0;
   } else {
     if (fieldType === "") {
       console.warn(
@@ -245,75 +109,6 @@ function validateFieldStringType(fieldValue, fieldType) {
   return result;
 }
 
-function loadSamplerMenuDict(samplerMenuDict) {
-  for (let field of samplerOptionMenu.children) {
-    if (
-      field.id !== "setting-api-key" &&
-      Object.keys(samplerMenuDict).includes(field.id) &&
-      field.className === samplerMenuDict[field.id]["type"]
-    ) {
-      if (
-        validateFieldStringType(
-          samplerMenuDict[field.id]["value"],
-          field.className
-        )
-      ) {
-        field.value = samplerMenuDict[field.id]["value"];
-      } else {
-        throw new TypeError(
-          "Attempted to import bad sampler settings, is your JSON corrupted?"
-        );
-      }
-    }
-  }
-}
-
-// Add this function to create a default chat JSON structure
-function createDefaultChatJson() {
-  return JSON.stringify(
-    {
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful assistant.",
-        },
-        {
-          role: "user",
-          content: "Hello!",
-        },
-      ],
-    },
-    null,
-    2
-  );
-}
-
-function internalSaveSamplerSettings() {
-  let currentSampler = document.getElementById("sampler").value;
-  let settingsName = document.getElementById("setting-settings-name").value;
-  if (Object.keys(samplerSettingsStore).includes("sampler-settings")) {
-    samplerSettingsStore["sampler-settings"][settingsName] =
-      samplerMenuToDict();
-  } else {
-    samplerSettingsStore["sampler-settings"] = new Object();
-    samplerSettingsStore["sampler-settings"][settingsName] =
-      samplerMenuToDict();
-  }
-  console.log(samplerSettingsStore);
-  ipcRenderer
-    .invoke("save-settings", samplerSettingsStore)
-    .catch(err => console.error("Settings save Error:", err));
-}
-
-// samplerOptionMenu.addEventListener("change", internalSaveSamplerSettings);
-// sampler.addEventListener("focus", internalSaveSamplerSettings);
-
-sampler?.addEventListener("change", function () {
-  if (activeTab === "sampler-settings") {
-    renderSamplerSettingsTab();
-  }
-});
-
 function loadSettings() {
   return ipcRenderer
     .invoke("load-settings")
@@ -325,95 +120,365 @@ function loadSettings() {
     .catch(err => console.error("Load Settings Error:", err));
 }
 
-// ---------- Tab 1: Sampler Settings ----------
-function renderSamplerSettingsTab() {
-  const samplerLabel = document.getElementById("sampler-label");
-  samplerLabel.style.display = "initial";
-  sampler.style.display = "initial";
-  menuHost.innerHTML = "";
+function persistStore() {
+  return ipcRenderer
+    .invoke("save-settings", samplerSettingsStore)
+    .catch(err => console.error("Settings save Error:", err));
+}
 
-  // Use whatever sampler is currently selected
-  const selected = sampler?.value || "openai";
-  if (selected === "base") baseSamplerMenu();
-  else if (selected === "together") togetherSamplerMenu();
-  else if (selected === "openrouter") openrouterSamplerMenu();
-  else if (selected === "openai") openaiCompletionsSamplerMenu();
-  else if (selected === "openai-chat") {
-    openaiChatCompletionsSamplerMenu();
-    // Guard optional editor helpers if present
-    if (
-      typeof editor !== "undefined" &&
-      typeof isValidChatJson === "function"
-    ) {
-      if (!editor.value?.trim() || !isValidChatJson(editor.value)) {
-        editor.value = createDefaultChatJson();
-        if (typeof updateCounterDisplay === "function")
-          updateCounterDisplay(editor.value);
-      }
+function flashSaved(message) {
+  const footer = document.getElementById("footer");
+  footer.textContent = message;
+  footer.className = "footer success";
+
+  // Clear the message after 3 seconds
+  setTimeout(() => {
+    footer.textContent = "";
+    footer.className = "footer";
+  }, 3000);
+}
+
+function getServicesObject() {
+  if (!samplerSettingsStore["services"]) {
+    samplerSettingsStore["services"] = {};
+  }
+  return samplerSettingsStore["services"];
+}
+
+function populateServiceSelect() {
+  const services = getServicesObject();
+  const entries = Object.keys(services);
+
+  serviceSelect.innerHTML = '<option value="">-- Select a service --</option>';
+  entries.forEach(name => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    serviceSelect.appendChild(option);
+  });
+}
+
+function showServiceForm(show = true) {
+  servicesForm.style.display = show ? "block" : "none";
+}
+
+function populateServiceForm(serviceName = null, serviceData = null) {
+  if (serviceName && serviceData) {
+    // Editing existing service
+    currentEditingService = serviceName;
+    document.getElementById("service-name").value = serviceName;
+    document.getElementById("sampling-method").value =
+      serviceData["sampling-method"] || "base";
+    document.getElementById("service-api-url").value =
+      serviceData["service-api-url"] || "";
+    document.getElementById("service-model-name").value =
+      serviceData["service-model-name"] || "";
+    document.getElementById("service-api-delay").value =
+      serviceData["service-api-delay"] || "";
+    document.getElementById("delete-service-btn").style.display =
+      "inline-block";
+    originalServiceData = { ...serviceData }; // Store original data
+  } else {
+    // Adding new service
+    currentEditingService = null;
+    document.getElementById("service-name").value = "";
+    document.getElementById("sampling-method").value = "base";
+    document.getElementById("service-api-url").value = "";
+    document.getElementById("service-model-name").value = "";
+    document.getElementById("service-api-delay").value = "";
+    document.getElementById("delete-service-btn").style.display = "none";
+    originalServiceData = null; // Clear original data for new service
+  }
+}
+
+function applyServiceDefaultsToForm(serviceType) {
+  const defaults = applyServiceDefaults(serviceType);
+  document.getElementById("service-api-url").value =
+    defaults["service-api-url"];
+  document.getElementById("service-model-name").value =
+    defaults["service-model-name"];
+  document.getElementById("service-api-delay").value =
+    defaults["service-api-delay"];
+}
+
+function saveService() {
+  const name = document.getElementById("service-name").value.trim();
+  const method = document.getElementById("sampling-method").value;
+  const url = document.getElementById("service-api-url").value.trim();
+  const model = document.getElementById("service-model-name").value.trim();
+  const delay = document.getElementById("service-api-delay").value.trim();
+
+  if (!validateFieldStringType(name, "modelNameType")) {
+    alert("Invalid service name. Use letters, digits, '-', '_', or '.'.");
+    return;
+  }
+
+  if (!validateFieldStringType(url, "URLType")) {
+    alert("Invalid API URL.");
+    return;
+  }
+
+  const services = getServicesObject();
+
+  // Check for duplicate names (unless editing the same service)
+  if (services[name] && name !== currentEditingService) {
+    alert("A service with this name already exists.");
+    return;
+  }
+
+  const serviceData = {
+    "sampling-method": method,
+    "service-api-url": url,
+    "service-model-name": model,
+    "service-api-delay": delay,
+  };
+
+  services[name] = serviceData;
+
+  // If we were editing and the name changed, delete the old one
+  if (currentEditingService && currentEditingService !== name) {
+    delete services[currentEditingService];
+  }
+
+  persistStore();
+  populateServiceSelect();
+  serviceSelect.value = name; // Select the saved item
+  populateServiceForm(name, serviceData); // Repopulate form with saved data
+  flashSaved(currentEditingService ? "Service updated." : "Service created.");
+}
+
+function deleteService() {
+  if (!currentEditingService) return;
+
+  if (
+    confirm(
+      `Are you sure you want to delete the service "${currentEditingService}"?`
+    )
+  ) {
+    const services = getServicesObject();
+    delete services[currentEditingService];
+    persistStore();
+    populateServiceSelect();
+    showServiceForm(false);
+    flashSaved("Service deleted.");
+  }
+}
+
+function cancelService() {
+  // Check if there are any changes by comparing current form values with original
+  if (originalServiceData && currentEditingService) {
+    const currentName = document.getElementById("service-name").value.trim();
+    const currentMethod = document.getElementById("sampling-method").value;
+    const currentUrl = document.getElementById("service-api-url").value.trim();
+    const currentModel = document
+      .getElementById("service-model-name")
+      .value.trim();
+    const currentDelay = document
+      .getElementById("service-api-delay")
+      .value.trim();
+
+    const hasChanges =
+      currentName !== currentEditingService ||
+      currentMethod !== originalServiceData["sampling-method"] ||
+      currentUrl !== originalServiceData["service-api-url"] ||
+      currentModel !== originalServiceData["service-model-name"] ||
+      currentDelay !== originalServiceData["service-api-delay"];
+
+    if (hasChanges) {
+      // Revert to original values
+      populateServiceForm(currentEditingService, originalServiceData);
+      flashSaved("Changes reverted.");
+    } else {
+      // No changes, just hide the form
+      showServiceForm(false);
     }
   } else {
-    // Fallback to base
-    baseSamplerMenu();
+    // New service or no original data, just hide the form
+    showServiceForm(false);
+  }
+
+  currentEditingService = null;
+  originalServiceData = null;
+}
+
+function getSamplersObject() {
+  if (!samplerSettingsStore["samplers"]) {
+    samplerSettingsStore["samplers"] = {};
+  }
+  return samplerSettingsStore["samplers"];
+}
+
+function populateSamplerSelect() {
+  const samplers = getSamplersObject();
+  const entries = Object.keys(samplers);
+
+  samplerSelect.innerHTML = '<option value="">-- Select a sampler --</option>';
+  entries.forEach(name => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    samplerSelect.appendChild(option);
+  });
+}
+
+function showSamplerForm(show = true) {
+  samplersForm.style.display = show ? "block" : "none";
+}
+
+function populateSamplerForm(samplerName = null, samplerData = null) {
+  if (samplerName && samplerData) {
+    // Editing existing sampler
+    currentEditingSampler = samplerName;
+    document.getElementById("sampler-name").value = samplerName;
+    document.getElementById("output-branches").value =
+      samplerData["output-branches"] || "";
+    document.getElementById("tokens-per-branch").value =
+      samplerData["tokens-per-branch"] || "";
+    document.getElementById("temperature").value =
+      samplerData["temperature"] || "";
+    document.getElementById("top-p").value = samplerData["top-p"] || "";
+    document.getElementById("top-k").value = samplerData["top-k"] || "";
+    document.getElementById("repetition-penalty").value =
+      samplerData["repetition-penalty"] || "";
+    document.getElementById("delete-sampler-btn").style.display =
+      "inline-block";
+    originalSamplerData = { ...samplerData }; // Store original data
+  } else {
+    // Adding new sampler
+    currentEditingSampler = null;
+    const defaults = getDefaultSampler();
+    document.getElementById("sampler-name").value = "";
+    document.getElementById("output-branches").value =
+      defaults["output-branches"];
+    document.getElementById("tokens-per-branch").value =
+      defaults["tokens-per-branch"];
+    document.getElementById("temperature").value = defaults["temperature"];
+    document.getElementById("top-p").value = defaults["top-p"];
+    document.getElementById("top-k").value = defaults["top-k"];
+    document.getElementById("repetition-penalty").value =
+      defaults["repetition-penalty"];
+    document.getElementById("delete-sampler-btn").style.display = "none";
+    originalSamplerData = null; // Clear original data for new sampler
+  }
+}
+
+function saveSampler() {
+  const name = document.getElementById("sampler-name").value.trim();
+  const branches = document.getElementById("output-branches").value.trim();
+  const tokens = document.getElementById("tokens-per-branch").value.trim();
+  const temp = document.getElementById("temperature").value.trim();
+  const topP = document.getElementById("top-p").value.trim();
+  const topK = document.getElementById("top-k").value.trim();
+  const penalty = document.getElementById("repetition-penalty").value.trim();
+
+  if (!validateFieldStringType(name, "modelNameType")) {
+    alert("Invalid sampler name. Use letters, digits, '-', '_', or '.'.");
+    return;
   }
 
   if (
-    "sampler-settings" in samplerSettingsStore &&
-    "Default" in samplerSettingsStore["sampler-settings"]
+    !validateFieldStringType(branches, "intType") ||
+    !validateFieldStringType(tokens, "intType") ||
+    !validateFieldStringType(temp, "floatType") ||
+    !validateFieldStringType(topP, "floatType") ||
+    !validateFieldStringType(topK, "intType") ||
+    !validateFieldStringType(penalty, "floatType")
   ) {
-    loadSamplerMenuDict(samplerSettingsStore["sampler-settings"]["Default"]);
+    alert("Please check your input values. Some fields have invalid formats.");
+    return;
   }
 
-  // Divider + explicit SAVE UI (no more forced "Default" load)
-  const divider = document.createElement("div");
-  divider.className = "divider";
-  menuHost.appendChild(divider);
+  const samplers = getSamplersObject();
 
-  // Save row: use your existing #setting-settings-name as the preset name
-  const saveRow = document.createElement("div");
-  saveRow.className = "row";
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "button";
-  saveBtn.className = "btn primary";
-  saveBtn.textContent = "Save preset";
-  saveBtn.title = "Save sampler settings under this name";
-  saveBtn.addEventListener("click", () => {
-    try {
-      internalSaveSamplerSettings();
-      flashSaved("Preset saved.");
-    } catch (e) {
-      console.error(e);
-      flashSaved("Failed to save preset (see console).", true);
+  // Check for duplicate names (unless editing the same sampler)
+  if (samplers[name] && name !== currentEditingSampler) {
+    alert("A sampler with this name already exists.");
+    return;
+  }
+
+  const samplerData = {
+    "output-branches": branches,
+    "tokens-per-branch": tokens,
+    temperature: temp,
+    "top-p": topP,
+    "top-k": topK,
+    "repetition-penalty": penalty,
+  };
+
+  samplers[name] = samplerData;
+
+  // If we were editing and the name changed, delete the old one
+  if (currentEditingSampler && currentEditingSampler !== name) {
+    delete samplers[currentEditingSampler];
+  }
+
+  persistStore();
+  populateSamplerSelect();
+  samplerSelect.value = name; // Select the saved item
+  populateSamplerForm(name, samplerData); // Repopulate form with saved data
+  flashSaved(currentEditingSampler ? "Sampler updated." : "Sampler created.");
+}
+
+function deleteSampler() {
+  if (!currentEditingSampler) return;
+
+  if (
+    confirm(
+      `Are you sure you want to delete the sampler "${currentEditingSampler}"?`
+    )
+  ) {
+    const samplers = getSamplersObject();
+    delete samplers[currentEditingSampler];
+    persistStore();
+    populateSamplerSelect();
+    showSamplerForm(false);
+    flashSaved("Sampler deleted.");
+  }
+}
+
+function cancelSampler() {
+  // Check if there are any changes by comparing current form values with original
+  if (originalSamplerData && currentEditingSampler) {
+    const currentName = document.getElementById("sampler-name").value.trim();
+    const currentBranches = document
+      .getElementById("output-branches")
+      .value.trim();
+    const currentTokens = document
+      .getElementById("tokens-per-branch")
+      .value.trim();
+    const currentTemp = document.getElementById("temperature").value.trim();
+    const currentTopP = document.getElementById("top-p").value.trim();
+    const currentTopK = document.getElementById("top-k").value.trim();
+    const currentPenalty = document
+      .getElementById("repetition-penalty")
+      .value.trim();
+
+    const hasChanges =
+      currentName !== currentEditingSampler ||
+      currentBranches !== originalSamplerData["output-branches"] ||
+      currentTokens !== originalSamplerData["tokens-per-branch"] ||
+      currentTemp !== originalSamplerData["temperature"] ||
+      currentTopP !== originalSamplerData["top-p"] ||
+      currentTopK !== originalSamplerData["top-k"] ||
+      currentPenalty !== originalSamplerData["repetition-penalty"];
+
+    if (hasChanges) {
+      // Revert to original values
+      populateSamplerForm(currentEditingSampler, originalSamplerData);
+      flashSaved("Changes reverted.");
+    } else {
+      // No changes, just hide the form
+      showSamplerForm(false);
     }
-  });
+  } else {
+    // New sampler or no original data, just hide the form
+    showSamplerForm(false);
+  }
 
-  const hint = document.createElement("span");
-  hint.className = "muted";
-  hint.textContent = "Tip: change “Settings Name” above, then click Save.";
-
-  saveRow.appendChild(saveBtn);
-  saveRow.appendChild(hint);
-  menuHost.appendChild(saveRow);
+  currentEditingSampler = null;
+  originalSamplerData = null;
 }
 
-function flashSaved(msg, isError = false) {
-  const note = document.createElement("div");
-  note.textContent = msg;
-  note.style.marginTop = "8px";
-  note.style.fontWeight = "600";
-  note.style.color = isError ? "#b00020" : "#0a7d06";
-  const pane = document.getElementById("settings-pane");
-  pane.appendChild(note);
-  setTimeout(() => note.remove(), 1800);
-}
-
-// ---------- Tab 2: API Keys ----------
-/**
- * Store shape:
- * samplerSettingsStore["api-keys"] = {
- *   "OPENAI": "sk-...",
- *   "TOGETHER": "tkn-..."
- * }
- */
 function getApiKeysObject() {
   if (!samplerSettingsStore["api-keys"]) {
     samplerSettingsStore["api-keys"] = {};
@@ -421,169 +486,241 @@ function getApiKeysObject() {
   return samplerSettingsStore["api-keys"];
 }
 
-function persistStore() {
-  return ipcRenderer
-    .invoke("save-settings", samplerSettingsStore)
-    .catch(err => console.error("Settings save Error:", err));
-}
+function renderApiKeysList() {
+  const tbody = document.getElementById("keys-tbody");
+  tbody.innerHTML = "";
+  const obj = getApiKeysObject();
+  const entries = Object.entries(obj);
 
-function renderApiKeysTab() {
-  const samplerLabel = document.getElementById("sampler-label");
-  samplerLabel.style.display = "none";
-  sampler.style.display = "none";
-  menuHost.innerHTML = "";
+  if (entries.length === 0) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.className = "muted";
+    td.textContent = "No API keys saved.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
 
-  // Add Key form
-  const addForm = document.createElement("div");
-  addForm.className = "row";
-  addForm.innerHTML = `
-    <label for="key-label">Key Name</label>
-    <input type="text" id="key-label" class="modelNameType" placeholder="e.g. OPENAI" />
-    <label for="key-value" style="margin-left:12px;">Secret</label>
-    <input type="password" id="key-value" placeholder="paste your API key" />
-    <button class="btn primary" id="add-key-btn">Add</button>
-  `;
-  menuHost.appendChild(addForm);
+  for (const [name, secret] of entries) {
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td");
+    tdName.textContent = name;
 
-  const warn = document.createElement("div");
-  warn.className = "muted";
-  warn.style.marginTop = "6px";
-  warn.textContent = "Names allow A–Z, a–z, 0–9, dash, underscore, and dot.";
-  menuHost.appendChild(warn);
+    const tdSecret = document.createElement("td");
+    const mask = document.createElement("span");
+    mask.textContent = "•".repeat(Math.min(secret?.length || 0, 12)) || "—";
+    mask.dataset.revealed = "0";
+    tdSecret.appendChild(mask);
 
-  const divider = document.createElement("div");
-  divider.className = "divider";
-  menuHost.appendChild(divider);
+    const tdActions = document.createElement("td");
+    const showBtn = document.createElement("button");
+    showBtn.className = "btn";
+    showBtn.textContent = "Show";
+    showBtn.addEventListener("click", () => {
+      const revealed = mask.dataset.revealed === "1";
+      mask.textContent = revealed
+        ? "•".repeat(Math.min(secret?.length || 0, 12))
+        : secret || "";
+      mask.dataset.revealed = revealed ? "0" : "1";
+      showBtn.textContent = revealed ? "Show" : "Hide";
+    });
 
-  // Keys table
-  const table = document.createElement("table");
-  table.className = "keys mono";
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th style="width:22%;">Name</th>
-        <th>Secret</th>
-        <th style="width:150px;">Actions</th>
-      </tr>
-    </thead>
-    <tbody id="keys-tbody"></tbody>
-  `;
-  menuHost.appendChild(table);
-
-  // Render rows
-  function refreshKeysTable() {
-    const tbody = table.querySelector("#keys-tbody");
-    tbody.innerHTML = "";
-    const obj = getApiKeysObject();
-    const entries = Object.entries(obj);
-    if (entries.length === 0) {
-      const tr = document.createElement("tr");
-      const td = document.createElement("td");
-      td.colSpan = 3;
-      td.className = "muted";
-      td.textContent = "No API keys saved.";
-      tr.appendChild(td);
-      tbody.appendChild(tr);
-      return;
-    }
-    for (const [name, secret] of entries) {
-      const tr = document.createElement("tr");
-      const tdName = document.createElement("td");
-      tdName.textContent = name;
-
-      const tdSecret = document.createElement("td");
-      const mask = document.createElement("span");
-      mask.textContent = "•".repeat(Math.min(secret?.length || 0, 12)) || "—";
-      mask.dataset.revealed = "0";
-      tdSecret.appendChild(mask);
-
-      const tdActions = document.createElement("td");
-      const showBtn = document.createElement("button");
-      showBtn.className = "btn";
-      showBtn.textContent = "Show";
-      showBtn.addEventListener("click", () => {
-        const revealed = mask.dataset.revealed === "1";
-        mask.textContent = revealed
-          ? "•".repeat(Math.min(secret?.length || 0, 12))
-          : secret || "";
-        mask.dataset.revealed = revealed ? "0" : "1";
-        showBtn.textContent = revealed ? "Show" : "Hide";
-      });
-
-      const delBtn = document.createElement("button");
-      delBtn.className = "btn";
-      delBtn.style.marginLeft = "6px";
-      delBtn.textContent = "Delete";
-      delBtn.addEventListener("click", async () => {
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn";
+    delBtn.style.marginLeft = "6px";
+    delBtn.textContent = "Delete";
+    delBtn.addEventListener("click", async () => {
+      if (confirm(`Are you sure you want to delete the API key "${name}"?`)) {
         const obj = getApiKeysObject();
         delete obj[name];
         await persistStore();
-        refreshKeysTable();
-      });
+        renderApiKeysList();
+        flashSaved("API key deleted.");
+      }
+    });
 
-      tdActions.appendChild(showBtn);
-      tdActions.appendChild(delBtn);
+    tdActions.appendChild(showBtn);
+    tdActions.appendChild(delBtn);
 
-      tr.appendChild(tdName);
-      tr.appendChild(tdSecret);
-      tr.appendChild(tdActions);
-      tbody.appendChild(tr);
-    }
+    tr.appendChild(tdName);
+    tr.appendChild(tdSecret);
+    tr.appendChild(tdActions);
+    tbody.appendChild(tr);
   }
+}
 
-  // Add key handler
-  addForm.querySelector("#add-key-btn").addEventListener("click", async () => {
-    const nameEl = addForm.querySelector("#key-label");
-    const valEl = addForm.querySelector("#key-value");
-    const name = nameEl.value.trim();
-    const value = valEl.value;
-
-    // Reuse your validator
-    if (!validateFieldStringType(name, "modelNameType")) {
-      alert("Invalid key name. Use letters, digits, '-', '_', or '.'.");
-      return;
-    }
-    if (!value) {
-      alert("Secret cannot be empty.");
-      return;
-    }
-
-    const obj = getApiKeysObject();
-    obj[name] = value;
-    await persistStore();
-    nameEl.value = "";
-    valEl.value = "";
-    refreshKeysTable();
-  });
-
-  refreshKeysTable();
+function showTab(tabElement) {
+  servicesTab.classList.remove("visible-tab");
+  samplersTab.classList.remove("visible-tab");
+  apiKeysTab.classList.remove("visible-tab");
+  tabElement.classList.add("visible-tab");
 }
 
 function setActiveTab(tabName) {
   activeTab = tabName;
+
+  // Update tab button states
   for (const b of document.querySelectorAll("#settings-tabs .tab-btn")) {
     b.classList.toggle("active", b.dataset.tab === activeTab);
   }
-  if (activeTab === "sampler-settings") {
-    renderSamplerSettingsTab();
+
+  // Show the appropriate tab and render its content
+  if (activeTab === "services") {
+    showTab(servicesTab);
+    populateServiceSelect();
+  } else if (activeTab === "samplers") {
+    showTab(samplersTab);
+    populateSamplerSelect();
   } else {
-    renderApiKeysTab();
+    showTab(apiKeysTab);
+    renderApiKeysList();
   }
 }
 
-const tabs = document.getElementById("settings-tabs");
-tabs.addEventListener("click", e => {
-  const btn = e.target.closest(".tab-btn");
-  if (!btn) return;
-  setActiveTab(btn.dataset.tab);
-});
+// Event listeners
+document.addEventListener("DOMContentLoaded", function () {
+  const addServiceBtn = document.getElementById("add-service-btn");
+  if (addServiceBtn) {
+    addServiceBtn.addEventListener("click", () => {
+      serviceSelect.value = ""; // Clear selection
+      showServiceForm(true);
+      populateServiceForm();
+    });
+  }
 
-renderSamplerSettingsTab();
-loadSettings().then(() => {
-  if (
-    "sampler-settings" in samplerSettingsStore &&
-    "Default" in samplerSettingsStore["sampler-settings"]
-  ) {
-    loadSamplerMenuDict(samplerSettingsStore["sampler-settings"]["Default"]);
+  const saveServiceBtn = document.getElementById("save-service-btn");
+  if (saveServiceBtn) {
+    saveServiceBtn.addEventListener("click", saveService);
+  }
+
+  const cancelServiceBtn = document.getElementById("cancel-service-btn");
+  if (cancelServiceBtn) {
+    cancelServiceBtn.addEventListener("click", cancelService);
+  }
+
+  const deleteServiceBtn = document.getElementById("delete-service-btn");
+  if (deleteServiceBtn) {
+    deleteServiceBtn.addEventListener("click", deleteService);
+  }
+
+  // Service select change
+  if (serviceSelect) {
+    serviceSelect.addEventListener("change", () => {
+      const selected = serviceSelect.value;
+      if (selected) {
+        const services = getServicesObject();
+        const serviceData = services[selected];
+        populateServiceForm(selected, serviceData);
+        showServiceForm(true);
+      } else {
+        showServiceForm(false);
+      }
+    });
+  }
+
+  // Sampling method change
+  const samplingMethod = document.getElementById("sampling-method");
+  if (samplingMethod) {
+    samplingMethod.addEventListener("change", () => {
+      applyServiceDefaultsToForm(samplingMethod.value);
+    });
+  }
+
+  // Samplers
+  const addSamplerBtn = document.getElementById("add-sampler-btn");
+  if (addSamplerBtn) {
+    addSamplerBtn.addEventListener("click", () => {
+      samplerSelect.value = ""; // Clear selection
+      showSamplerForm(true);
+      populateSamplerForm();
+    });
+  }
+
+  const saveSamplerBtn = document.getElementById("save-sampler-btn");
+  if (saveSamplerBtn) {
+    saveSamplerBtn.addEventListener("click", saveSampler);
+  }
+
+  const cancelSamplerBtn = document.getElementById("cancel-sampler-btn");
+  if (cancelSamplerBtn) {
+    cancelSamplerBtn.addEventListener("click", cancelSampler);
+  }
+
+  const deleteSamplerBtn = document.getElementById("delete-sampler-btn");
+  if (deleteSamplerBtn) {
+    deleteSamplerBtn.addEventListener("click", deleteSampler);
+  }
+
+  // Sampler select change
+  if (samplerSelect) {
+    samplerSelect.addEventListener("change", () => {
+      const selected = samplerSelect.value;
+      if (selected) {
+        const samplers = getSamplersObject();
+        const samplerData = samplers[selected];
+        populateSamplerForm(selected, samplerData);
+        showSamplerForm(true);
+      } else {
+        showSamplerForm(false);
+      }
+    });
+  }
+
+  // API Keys
+  const addKeyBtn = document.getElementById("add-key-btn");
+  if (addKeyBtn) {
+    addKeyBtn.addEventListener("click", async () => {
+      const nameEl = document.getElementById("key-label");
+      const valEl = document.getElementById("key-value");
+      const name = nameEl.value.trim();
+      const value = valEl.value;
+
+      if (!validateFieldStringType(name, "modelNameType")) {
+        alert("Invalid key name. Use letters, digits, '-', '_', or '.'.");
+        return;
+      }
+      if (!value) {
+        alert("Secret cannot be empty.");
+        return;
+      }
+
+      const obj = getApiKeysObject();
+      if (obj[name]) {
+        alert("An API key with this name already exists.");
+        return;
+      }
+
+      obj[name] = value;
+      await persistStore();
+      nameEl.value = "";
+      valEl.value = "";
+      renderApiKeysList();
+      flashSaved("API key added.");
+    });
+  }
+
+  // Tab switching
+  const tabs = document.getElementById("settings-tabs");
+  if (tabs) {
+    tabs.addEventListener("click", e => {
+      const btn = e.target.closest(".tab-btn");
+      if (!btn) return;
+      setActiveTab(btn.dataset.tab);
+    });
+  }
+
+  // Initialize
+  loadSettings().then(() => {
+    setActiveTab("services"); // Set initial active tab with loaded data
+  });
+
+  // Close button handler
+  const closeBtn = document.getElementById("close-settings");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      ipcRenderer.send("close-settings-window");
+    });
   }
 });

@@ -338,12 +338,6 @@
         flex-shrink: 0;
       }
 
-      .dropdowns-row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
       .die-and-generate-container {
         display: flex;
         align-items: center;
@@ -365,7 +359,7 @@
         flex-direction: row;
         align-items: flex-start;
         flex-shrink: 0;
-        gap: 16px;
+        gap: 12px;
         position: relative;
       }
 
@@ -374,6 +368,7 @@
         flex-direction: column;
         gap: 4px;
         flex: 1;
+        min-width: 0;
       }
 
       #node-summary-display {
@@ -735,6 +730,71 @@
       #search-suggestions {
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       }
+
+      #generate-button-container .reroll {
+        cursor: pointer;
+        padding: 8px 16px;
+        background-color: #d50402;
+        color: white;
+        border-radius: 4px;
+        font-weight: 500;
+        transition: background-color 0.2s;
+      }
+
+      #generate-button-container .reroll:hover {
+        background-color: #b00020;
+      }
+
+      #generation-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-left: auto;
+        margin-right: 0;
+      }
+
+      .control-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .control-group label {
+        font-size: 16px;
+        font-weight: 500;
+        color: #666;
+        margin: 0;
+        cursor: help;
+        flex-shrink: 0;
+      }
+
+      .control-group select {
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+        font-size: 13px;
+        color: #333;
+        cursor: pointer;
+        min-width: 110px;
+        transition: border-color 0.2s;
+      }
+
+      .control-group select:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      .control-group select:hover {
+        border-color: #adb5bd;
+      }
+
+      #die {
+        height: 32px;
+        width: 40px;
+        margin-right: 8px;
+      }
     </style>
   </head>
   <body>
@@ -783,6 +843,29 @@
               <span id="thumb-down" class="thumbs">👎</span>
             </div>
           </div>
+
+          <!-- New Services and Samplers Selectors -->
+          <div id="generation-controls">
+            <div class="control-group">
+              <label for="service-selector" title="Service">🌐</label>
+              <select id="service-selector">
+                <option value="">-- Select a service --</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label for="sampler-selector" title="Sampler">🎲</label>
+              <select id="sampler-selector">
+                <option value="">-- Select a sampler --</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label for="api-key-selector" title="API Key">🔑</label>
+              <select id="api-key-selector">
+                <option value="">-- Select API key --</option>
+              </select>
+            </div>
+          </div>
+
           <div id="die">🎲</div>
           <div id="generate-button-container" class="generate-button-container">
             <span id="generate-button" class="reroll"

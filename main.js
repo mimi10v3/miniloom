@@ -104,8 +104,10 @@ function openSettingsWindow() {
     parent: mainWindow,
     modal: true,
     show: false,
-    width: 400,
-    height: 300,
+    width: 1000,
+    height: 700,
+    minWidth: 800,
+    minHeight: 500,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
