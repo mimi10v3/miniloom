@@ -171,17 +171,7 @@ ipcMain.handle("load-settings", async (event) => {
   }
 });
 
-// Change this so it no longer saves settings
-ipcMain.handle("auto-save", (event, data) => {
-  const userFileData = {};
-  userFileData["loomTree"] = data["loomTree"];
-  userFileData["focus"] = data["focus"];
-  if (autoSavePath) {
-    fs.writeFileSync(autoSavePath, JSON.stringify(userFileData));
-  }
-});
-
-ipcMain.handle("save-settings", (event, miniLoomSettings) => {
+function saveSettingsSync(miniLoomSettings) {
   const appDataPath = app.getPath("appData");
   const miniLoomSettingsDir = path.join(appDataPath, "miniloom");
   const miniLoomSettingsFilePath = path.join(
@@ -192,6 +182,20 @@ ipcMain.handle("save-settings", (event, miniLoomSettings) => {
     fs.mkdirSync(miniLoomSettingsDir);
   }
   fs.writeFileSync(miniLoomSettingsFilePath, JSON.stringify(miniLoomSettings));
+}
+
+ipcMain.handle("auto-save", (event, data) => {
+  const userFileData = {};
+  userFileData["loomTree"] = data["loomTree"];
+  userFileData["focus"] = data["focus"];
+  if (autoSavePath) {
+    fs.writeFileSync(autoSavePath, JSON.stringify(userFileData));
+  }
+  saveSettingsSync(data["samplerSettingsStore"]);
+});
+
+ipcMain.handle("save-settings", (event, miniLoomSettings) => {
+  saveSettingsSync(miniLoomSettings);
 });
 
 app

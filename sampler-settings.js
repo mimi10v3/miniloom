@@ -550,6 +550,307 @@ function renderApiKeysTab() {
   refreshKeysTable();
 }
 
+function renderPalettesTab() {
+  const host = samplerOptionMenu;
+  host.innerHTML = "";
+
+  // ---- helpers ----
+  function palettesObj() {
+    if (!samplerSettingsStore.palettes) samplerSettingsStore.palettes = {};
+    return samplerSettingsStore.palettes;
+  }
+  const samplerTypes = [
+    { value: "openai",      label: "OpenAI Completions" },
+    { value: "openai-chat", label: "OpenAI Chat Completions" },
+    { value: "openrouter",  label: "OpenRouter API" },
+    { value: "together",    label: "Together API" },
+  ];
+  const listPresets = () => Object.keys(samplerSettingsStore["sampler-settings"] || {});
+  const listApiKeys = () => Object.keys(samplerSettingsStore["api-keys"] || {});
+  const persist = () =>
+    ipcRenderer.invoke("save-settings", samplerSettingsStore)
+      .catch(err => console.error("Settings save Error:", err));
+
+  // ---- top row: palette picker + inline name field with Create/Rename/Delete ----
+  const topRow = document.createElement("div"); topRow.className = "row";
+
+  const palLabel = document.createElement("label");
+  palLabel.textContent = "Palette";
+
+  const palSelect = document.createElement("select");
+  palSelect.id = "paletteEditorSelect";
+
+  // ensure at least one palette exists
+  const pObj = palettesObj();
+  if (Object.keys(pObj).length === 0) pObj["MyFirstPalette"] = {};
+
+  for (const name of Object.keys(pObj)) {
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = name;
+    palSelect.appendChild(opt);
+  }
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.placeholder = "Palette name";
+
+  const createBtn = document.createElement("button");
+  createBtn.type = "button";
+  createBtn.textContent = "Create";
+
+  const renameBtn = document.createElement("button");
+  renameBtn.type = "button";
+  renameBtn.textContent = "Rename";
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.textContent = "Delete";
+
+  topRow.append(palLabel, palSelect, nameInput, createBtn, renameBtn, deleteBtn);
+  host.appendChild(topRow);
+
+  const divider = document.createElement("div");
+  divider.style.height = "1px";
+  divider.style.background = "rgba(0,0,0,.1)";
+  divider.style.margin = "8px 0";
+  host.appendChild(divider);
+
+  // ---- table: up to 6 items ----
+  const table = document.createElement("table");
+  table.style.width = "100%";
+  table.style.borderCollapse = "collapse";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:6px;">Item Name</th>
+        <th style="text-align:left;padding:6px;">Sampler Type</th>
+        <th style="text-align:left;padding:6px;">Sampler Preset</th>
+        <th style="text-align:left;padding:6px;">API Key</th>
+        <th style="text-align:left;padding:6px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="palItemsBody"></tbody>
+  `;
+  host.appendChild(table);
+
+  const controls = document.createElement("div"); controls.className = "row";
+  const addBtn = document.createElement("button"); addBtn.type = "button"; addBtn.textContent = "Add Item";
+  const saveBtn = document.createElement("button"); saveBtn.type = "button"; saveBtn.textContent = "Save Palette";
+  controls.append(addBtn, saveBtn);
+  host.appendChild(controls);
+
+  const tbody = table.querySelector("#palItemsBody");
+
+  function tdStyled() {
+    const td = document.createElement("td");
+    td.style.padding = "6px";
+    td.style.borderBottom = "1px solid rgba(0,0,0,.08)";
+    return td;
+  }
+
+  function fillRow(itemName = "", data = null) {
+    const tr = document.createElement("tr");
+
+    // name
+    const tdName = tdStyled();
+    const name = document.createElement("input");
+    name.type = "text";
+    name.placeholder = "e.g. FastDraft";
+    name.value = itemName;
+    tdName.appendChild(name);
+
+    // sampler type
+    const tdType = tdStyled();
+    const typeSel = document.createElement("select");
+    samplerTypes.forEach(t => {
+      const o = document.createElement("option");
+      o.value = t.value; o.textContent = t.label;
+      typeSel.appendChild(o);
+    });
+    typeSel.value = data?.samplerType || samplerTypes[0].value;
+    tdType.appendChild(typeSel);
+
+    // preset
+    const tdPreset = tdStyled();
+    const presetSel = document.createElement("select");
+    const presets = listPresets();
+    if (presets.length === 0) {
+      const o = document.createElement("option");
+      o.value = ""; o.textContent = "(no presets)";
+      presetSel.appendChild(o);
+    } else {
+      presets.forEach(n => {
+        const o = document.createElement("option");
+        o.value = n; o.textContent = n;
+        presetSel.appendChild(o);
+      });
+    }
+    presetSel.value = data?.samplerPreset || presetSel.options[0]?.value || "";
+    tdPreset.appendChild(presetSel);
+
+    // api key
+    const tdKey = tdStyled();
+    const keySel = document.createElement("select");
+    const keys = listApiKeys();
+    if (keys.length === 0) {
+      const o = document.createElement("option");
+      o.value = ""; o.textContent = "(no keys)";
+      keySel.appendChild(o);
+    } else {
+      keys.forEach(k => {
+        const o = document.createElement("option");
+        o.value = k; o.textContent = k;
+        keySel.appendChild(o);
+      });
+    }
+    keySel.value = data?.apiKey || keySel.options[0]?.value || "";
+    tdKey.appendChild(keySel);
+
+    // actions
+    const tdAct = tdStyled();
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "Delete";
+    del.addEventListener("click", () => {
+      tr.remove(); updateAddDisabled();
+    });
+    tdAct.appendChild(del);
+
+    tr.append(tdName, tdType, tdPreset, tdKey, tdAct);
+    tbody.appendChild(tr);
+  }
+
+  function updateAddDisabled() {
+    addBtn.disabled = tbody.querySelectorAll("tr").length >= 6;
+  }
+
+  function loadPaletteIntoTable(paletteName) {
+    tbody.innerHTML = "";
+    const pal = palettesObj()[paletteName] || {};
+    const entries = Object.entries(pal).slice(0, 6);
+    if (entries.length === 0) {
+      fillRow("", null); // start with one blank row for UX
+    } else {
+      for (const [itemName, data] of entries) fillRow(itemName, data);
+    }
+    updateAddDisabled();
+  }
+
+  function readFromTable() {
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const out = {};
+    for (const tr of rows) {
+      const [nameInput, typeSel, presetSel, keySel] = tr.querySelectorAll("input,select");
+      const itemName = (nameInput.value || "").trim();
+      if (!itemName) continue; // ignore empty row(s)
+      if (!validateFieldStringType(itemName, "modelNameType")) {
+        throw new Error(`Invalid item name "${itemName}" (use letters/digits/._-).`);
+      }
+      if (out[itemName]) throw new Error(`Duplicate item name "${itemName}".`);
+      out[itemName] = {
+        samplerType: typeSel.value,
+        samplerPreset: presetSel.value,
+        apiKey: keySel.value,
+      };
+    }
+    if (Object.keys(out).length > 6) throw new Error("A palette may contain at most six items.");
+    return out;
+  }
+
+  // ---- wire top controls (no prompt/confirm) ----
+  createBtn.addEventListener("click", async () => {
+    const n = nameInput.value.trim();
+    if (!n) return alert("Enter a palette name in the input field.");
+    if (!validateFieldStringType(n, "modelNameType")) return alert("Use letters/digits/._-");
+    const p = palettesObj();
+    if (p[n]) return alert("A palette with that name already exists.");
+    p[n] = {};
+    await persist();
+
+    // refresh select
+    palSelect.appendChild(new Option(n, n));
+    palSelect.value = n;
+    nameInput.value = "";
+    loadPaletteIntoTable(n);
+    if (typeof flashSaved === "function") flashSaved("Palette created.");
+  });
+
+  renameBtn.addEventListener("click", async () => {
+    const oldName = palSelect.value;
+    const n = nameInput.value.trim();
+    if (!n) return alert("Enter a new name in the input field.");
+    if (!validateFieldStringType(n, "modelNameType")) return alert("Use letters/digits/._-");
+    const p = palettesObj();
+    if (p[n]) return alert("A palette with that name already exists.");
+    p[n] = p[oldName]; delete p[oldName];
+    await persist();
+
+    // rebuild select (simpler than fiddling options)
+    palSelect.innerHTML = "";
+    for (const name of Object.keys(p)) palSelect.appendChild(new Option(name, name));
+    palSelect.value = n;
+    nameInput.value = "";
+    loadPaletteIntoTable(n);
+    if (typeof flashSaved === "function") flashSaved("Palette renamed.");
+  });
+
+  // Delete uses a small 2-step inline confirmation (no confirm())
+  let deleteArmed = false, deleteTimer = null;
+  deleteBtn.addEventListener("click", async () => {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      const oldText = deleteBtn.textContent;
+      deleteBtn.textContent = "Click again to delete…";
+      clearTimeout(deleteTimer);
+      deleteTimer = setTimeout(() => {
+        deleteArmed = false;
+        deleteBtn.textContent = oldText;
+      }, 2500);
+      return;
+    }
+    deleteArmed = false;
+    deleteBtn.textContent = "Delete";
+
+    const p = palettesObj();
+    const current = palSelect.value;
+    delete p[current];
+    if (Object.keys(p).length === 0) p["MyFirstPalette"] = {};
+
+    await persist();
+    // rebuild select
+    palSelect.innerHTML = "";
+    for (const name of Object.keys(p)) palSelect.appendChild(new Option(name, name));
+    loadPaletteIntoTable(palSelect.value);
+    if (typeof flashSaved === "function") flashSaved("Palette deleted.");
+  });
+
+  // ---- items controls ----
+  palSelect.addEventListener("change", () => loadPaletteIntoTable(palSelect.value));
+
+  addBtn.addEventListener("click", () => {
+    if (tbody.querySelectorAll("tr").length >= 6) return;
+    fillRow("", null);
+    updateAddDisabled();
+  });
+
+  saveBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      const name = palSelect.value;
+      palettesObj()[name] = readFromTable();
+      await persist();
+      if (typeof flashSaved === "function") flashSaved("Palette saved.");
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Failed to save palette.");
+    }
+  });
+
+  // ---- initial load ----
+  loadPaletteIntoTable(palSelect.value);
+}
+
+
 function setActiveTab(tabName) {
   activeTab = tabName;
   for (const b of document.querySelectorAll("#settings-tabs .tab-btn")) {
@@ -557,7 +858,8 @@ function setActiveTab(tabName) {
   }
   if (activeTab === "sampler-settings") {
     renderSamplerSettingsTab();
-  } else {
+  } else if (activeTab === "palettes") renderPalettesTab();
+    else {
     renderApiKeysTab();
   }
 }

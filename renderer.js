@@ -341,11 +341,15 @@ function changeFocus(newFocusId) {
 }
 
 function prepareRollParams() {
-  const sampler = document.getElementById("sampler-name");
-  const presetName = document.getElementById("sampler-preset-name");
-  const apiKeyName = document.getElementById("api-key-name");
-  const preset = samplerSettingsStore["sampler-settings"][presetName.value];
-  const apiKey = samplerSettingsStore["api-keys"][apiKeyName.value];
+  const paletteName = document.getElementById("paletteSelect").value;
+  const paletteSamplerName = document.getElementById("samplerItemSelect").value;
+  const paletteSamplerItem = samplerSettingsStore["palettes"][paletteName][paletteSamplerName];
+  console.log(paletteSamplerItem);
+  const sampler = paletteSamplerItem["samplerType"];
+  const presetName = paletteSamplerItem["samplerPreset"];
+  const apiKeyName = paletteSamplerItem["apiKey"];
+  const preset = samplerSettingsStore["sampler-settings"][presetName];
+  const apiKey = samplerSettingsStore["api-keys"][apiKeyName];
   let apiUrl;
   if ("api-url" in preset) {
     apiUrl = preset["api-url"]["value"];
@@ -410,7 +414,7 @@ function prepareRollParams() {
     modelName = "";
   }
 
-  return {"sampler":sampler.value,
+  return {"sampler":sampler,
           "api-url":apiUrl,
           "output-branches":outputBranches,
 	  "tokens-per-branch":tokensPerBranch,
@@ -661,6 +665,198 @@ function diceTeardown() {
   editor.readOnly = false;
   const die = document.getElementById("die");
   die.remove();
+}
+
+// Roulette-style color scheme (alternating red and black)
+function getRouletteColor(index) {
+  return index % 2 === 0 ? '#ef4444' : '#0f172a'; // bright red : very dark (almost black)
+}
+
+// Handle palette selection change
+function onPaletteChange(event) {
+  const paletteName = event.target.value;
+    
+  if (!paletteName) {
+    clearWheel();
+    return;
+  }
+            
+  const palette = samplerSettingsStore.palettes[paletteName];
+  updateWheel(palette);
+}
+
+// Clear the wheel
+function clearWheel() {
+  const wheelContainer = document.getElementById('wheelContainer');
+  const wheelCenter = document.getElementById('wheelCenter');
+  wheelContainer.classList.remove("active");
+  wheelCenter.classList.remove("active");
+  wheelCenter.style.display = "none";
+  const wheel = document.getElementById('paletteWheel');
+  wheel.innerHTML = '<div class="empty-wheel">Select palette</div>';
+            
+  const samplerSelect = document.getElementById('samplerItemSelect');
+  samplerSelect.innerHTML = '';
+            
+  document.getElementById('currentSampler').textContent = 'None selected';
+}
+
+// Create SVG arc path
+function createArcPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle) {
+  const startAngleRad = (startAngle * Math.PI) / 180;
+  const endAngleRad = (endAngle * Math.PI) / 180;
+            
+  const x1 = centerX + innerRadius * Math.cos(startAngleRad);
+  const y1 = centerY + innerRadius * Math.sin(startAngleRad);
+  const x2 = centerX + outerRadius * Math.cos(startAngleRad);
+  const y2 = centerY + outerRadius * Math.sin(startAngleRad);
+  const x3 = centerX + outerRadius * Math.cos(endAngleRad);
+  const y3 = centerY + outerRadius * Math.sin(endAngleRad);
+  const x4 = centerX + innerRadius * Math.cos(endAngleRad);
+  const y4 = centerY + innerRadius * Math.sin(endAngleRad);
+            
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+            
+  return `M ${x1} ${y1} L ${x2} ${y2} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x3} ${y3} L ${x4} ${y4} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x1} ${y1}`;
+}
+
+// Update the wheel with palette items
+function updateWheel(palette) {
+  const wheelContainer = document.getElementById('wheelContainer');
+  const wheelCenter = document.getElementById('wheelCenter');
+  wheelContainer.classList.add("active");
+  wheelCenter.classList.add("active");
+  wheelCenter.style.display = "flex";
+  const wheel = document.getElementById('paletteWheel');
+  const samplerSelect = document.getElementById('samplerItemSelect');
+  const items = Object.entries(palette);
+  const numItems = items.length;
+    
+  if (numItems === 0) {
+    clearWheel();
+    return;
+  }
+            
+            // Clear existing content
+            wheel.innerHTML = '';
+            samplerSelect.innerHTML = '';
+            
+            // Create SVG element
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'wheel-svg');
+            svg.setAttribute('viewBox', '0 0 100 100');
+            
+            const centerX = 50;
+            const centerY = 50;
+            const innerRadius = 18;
+            const outerRadius = 48;
+            
+            // Add option for each sampler item to hidden select
+            items.forEach(([name, data]) => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                samplerSelect.appendChild(option);
+            });
+            
+            // Create wheel segments
+            const anglePerSection = 360 / numItems;
+            
+            // Add outer gold ring
+            const outerRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            outerRing.setAttribute('cx', centerX);
+            outerRing.setAttribute('cy', centerY);
+            outerRing.setAttribute('r', outerRadius + 1);
+            outerRing.setAttribute('fill', 'none');
+            outerRing.setAttribute('stroke', '#fbbf24');
+            outerRing.setAttribute('stroke-width', '2');
+            
+            // Add inner gold ring  
+            const innerRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            innerRing.setAttribute('cx', centerX);
+            innerRing.setAttribute('cy', centerY);
+            innerRing.setAttribute('r', innerRadius - 1);
+            innerRing.setAttribute('fill', 'none');
+            innerRing.setAttribute('stroke', '#fbbf24');
+            innerRing.setAttribute('stroke-width', '2');
+            
+            items.forEach(([name, data], index) => {
+                const startAngle = index * anglePerSection - 90; // Start from top
+                const endAngle = (index + 1) * anglePerSection - 90;
+                
+                // Create path for segment
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', createArcPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle));
+                path.setAttribute('fill', getRouletteColor(index));
+                path.setAttribute('class', 'wheel-segment');
+                path.dataset.samplerName = name;
+                
+                // Add click handler
+                path.addEventListener('click', () => selectSamplerItem(name));
+                
+                svg.appendChild(path);
+                
+                // Add text label - only for smaller numbers of items
+                if (numItems <= 4) {
+                    const midAngle = (startAngle + endAngle) / 2;
+                    const midAngleRad = (midAngle * Math.PI) / 180;
+                    const textRadius = (innerRadius + outerRadius) / 2;
+                    const textX = centerX + textRadius * Math.cos(midAngleRad);
+                    const textY = centerY + textRadius * Math.sin(midAngleRad);
+                    
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', textX);
+                    text.setAttribute('y', textY);
+                    text.setAttribute('class', 'segment-text');
+                    
+                    // Very short labels
+                    const displayName = name.length > 8 ? name.substring(0, 6) + '..' : name.substring(0, 8);
+                    text.textContent = displayName;
+                    
+                    // Rotate text to align with segment
+                    const rotation = midAngle + 90 > 90 && midAngle + 90 < 270 ? midAngle + 270 : midAngle + 90;
+                    text.setAttribute('transform', `rotate(${rotation}, ${textX}, ${textY})`);
+                    
+                    svg.appendChild(text);
+                }
+            });
+            
+            wheel.appendChild(svg);
+            
+            // Add gold rings on top (after segments are added)
+            svg.appendChild(outerRing);
+            svg.appendChild(innerRing);
+            
+            // Select first item by default
+            if (items.length > 0) {
+                selectSamplerItem(items[0][0]);
+            }
+        }
+	
+// Handle sampler item selection
+function selectSamplerItem(samplerName) {
+  const samplerSelect = document.getElementById('samplerItemSelect');
+  samplerSelect.value = samplerName;
+            
+  // Update visual feedback
+  document.querySelectorAll('.wheel-segment').forEach(segment => {
+    segment.classList.remove('active');
+    if (segment.dataset.samplerName === samplerName) {
+      segment.classList.add('active');
+    }
+  });
+            
+  // Update current selection display
+  document.getElementById('currentSampler').textContent = "🖋️" + samplerName;
+
+  // Save choice for when we have to render palette wheel again
+  // As well as when user closes app
+  if (!("current-sampler" in samplerSettingsStore)) {
+    samplerSettingsStore["current-sampler"] = Object();
+  }
+  const paletteName = document.getElementById("paletteSelect").value;
+  samplerSettingsStore["current-sampler"]["palette"] = paletteName;
+  samplerSettingsStore["current-sampler"]["sampler-item"] = samplerName;
 }
 
 async function delay(ms) {

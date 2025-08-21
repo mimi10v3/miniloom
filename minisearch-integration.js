@@ -506,6 +506,27 @@ function insertSearchBar() {
   treeContainer.insertBefore(searchBar, loomTreeView);
 }
 
+// Initialize the palette dropdown
+function initializePaletteDropdown() {
+  const paletteSelect = document.getElementById('paletteSelect');
+  
+  for (const paletteName in samplerSettingsStore.palettes) {
+    const option = document.createElement('option');
+    option.value = paletteName;
+    option.textContent = paletteName;
+    paletteSelect.appendChild(option);
+  }
+            
+  paletteSelect.addEventListener('change', onPaletteChange);
+  if ("current-sampler" in samplerSettingsStore) {
+    paletteSelect.value = samplerSettingsStore["current-sampler"]["palette"];
+    const currentSamplerItem = samplerSettingsStore["current-sampler"]["sampler-item"];
+    console.log(currentSamplerItem);
+    updateWheel(samplerSettingsStore.palettes[paletteSelect.value]);
+    selectSamplerItem(currentSamplerItem);
+  }
+}
+
 // Modified renderTick to use new render function
 const originalRenderTick = renderTick;
 window.renderTick = function () {
@@ -577,55 +598,73 @@ window.renderTick = function () {
 
   const genControls = document.createElement("div");
   genControls.id = "gen-controls";
-    
-  const samplerSelect = document.createElement("select");
-  samplerSelect.id = "sampler-name";
-  const samplerOptionOpenAIComp = document.createElement("option");
-  samplerOptionOpenAIComp.value = "openai";
-  samplerOptionOpenAIComp.text = "OpenAI Completions";
-  const samplerOptionOpenAIChat = document.createElement("option");
-  samplerOptionOpenAIChat.value = "openai-chat";
-  samplerOptionOpenAIChat.text = "OpenAI Chat Completions";
-  const samplerOptionOpenRouter = document.createElement("option")
-  samplerOptionOpenRouter.value = "openrouter";
-  samplerOptionOpenRouter.text = "OpenRouter API";
-  const samplerOptionTogether = document.createElement("option");
-  samplerOptionTogether.value = "together";
-  samplerOptionTogether.text = "Together API";
-  samplerSelect.append(samplerOptionOpenAIComp);
-  samplerSelect.append(samplerOptionOpenAIChat);
-  samplerSelect.append(samplerOptionOpenRouter);
-  samplerSelect.append(samplerOptionTogether);
-  genControls.append(samplerSelect);
+  
+  // Build "Sampler Palette Wheel" UI
+  const samplerPaletteContainer = document.createElement("div");
+  samplerPaletteContainer.classList.add("palette-wheel-widget");
 
-  const samplerPresets = document.createElement("select");
-  samplerPresets.id = "sampler-preset-name";
-  for (let samplerPresetName of Object.keys(samplerSettingsStore["sampler-settings"])) {
-    const samplerPresetOption = document.createElement("option");
-    samplerPresetOption.value = samplerPresetName;
-    samplerPresetOption.text = samplerPresetName;
-    samplerPresets.append(samplerPresetOption);
-  }
-  genControls.append(samplerPresets);
+  // Palette selector
+  const paletteSelector = document.createElement("div");
+  paletteSelector.classList.add("palette-selector");
 
-  const apiKeys = document.createElement("select");
-  apiKeys.id = "api-key-name";
-  for (let apiKeyName of Object.keys(samplerSettingsStore["api-keys"])) {
-    const apiKeyOption = document.createElement("option");
-    apiKeyOption.value = apiKeyName;
-    apiKeyOption.text = apiKeyName;
-    apiKeys.append(apiKeyOption);
-  }
-  genControls.append(apiKeys);
+  const paletteSelect = document.createElement("select");
+  paletteSelect.id = "paletteSelect";
+  paletteSelect.classList.add("palette-dropdown");
+  const paletteDefaultOpt = document.createElement("option");
+  paletteDefaultOpt.value = "";
+  paletteDefaultOpt.text = "Choose a palette...";
+  paletteSelect.append(paletteDefaultOpt);
 
-  const quickRollSpan = document.createElement("span");
-  quickRollSpan.classList.add("reroll");
-  quickRollSpan.textContent = "🖋️";
-  quickRollSpan.onclick = () => reroll(focus.id, false);
-  genControls.append(quickRollSpan);
+  paletteSelector.append(paletteSelect);
+  samplerPaletteContainer.append(paletteSelector);
+
+  const wheelWrapper = document.createElement("div");
+  wheelWrapper.classList.add("wheel-wrapper");
+
+  // Wheel container
+  const wheelContainer = document.createElement("div");
+  wheelContainer.id = "wheelContainer";
+  wheelContainer.classList.add("wheel-container");
+
+  const paletteWheel = document.createElement("div");
+  paletteWheel.classList.add("palette-wheel");
+  paletteWheel.id = "paletteWheel";
+
+  const emptyWheel = document.createElement("div");
+  emptyWheel.classList.add("empty-wheel");
+  emptyWheel.textContent = "Select a palette to begin";
+  paletteWheel.append(emptyWheel);
+
+  const wheelCenter = document.createElement("div");
+  wheelCenter.id = "wheelCenter";
+  wheelCenter.classList.add("wheel-center");
+
+  wheelContainer.append(paletteWheel);
+  wheelContainer.append(wheelCenter);
+  wheelWrapper.append(wheelContainer)
+  samplerPaletteContainer.append(wheelWrapper);
+
+  // Hidden dropdown controlling selected sampler item
+  const samplerItemSelect = document.createElement("select");
+  samplerItemSelect.classList.add("hidden-sampler-select");
+  samplerItemSelect.id = "samplerItemSelect";
+  // If you want it truly hidden without CSS:
+  samplerItemSelect.hidden = true; // or: samplerItemSelect.style.display = "none";
+  samplerPaletteContainer.append(samplerItemSelect);
+
+  // Current selection
+  const currentSelection = document.createElement("div");
+  currentSelection.classList.add("current-selection");
+  currentSelection.classList.add("reroll");
+  currentSelection.id = "currentSampler";
+  currentSelection.textContent = "None selected";
+  currentSelection.onclick = () => reroll(focus.id, false);
+  samplerPaletteContainer.append(currentSelection);
+
+  genControls.append(samplerPaletteContainer);  
   branchControlButtonsDiv.append(genControls);
 
-    
+
   if (focus.type === "weave") {
     const branchScoreSpan = document.createElement("span");
     branchScoreSpan.classList.add("reward-score");
@@ -647,6 +686,7 @@ window.renderTick = function () {
   const loomTreeView = document.getElementById("loom-tree-view");
   loomTreeView.innerHTML = "";
   renderTreeOrSearch(focus, loomTreeView); // Use our new function
+  initializePaletteDropdown();
   errorMessage.textContent = "";
   updateCounterDisplay(editor.value);
 };
