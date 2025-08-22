@@ -18,8 +18,12 @@ function createWindow() {
     width: 1200,
     height: 900,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      sandbox: false,
     },
   });
 
@@ -109,8 +113,12 @@ function openSettingsWindow() {
     minWidth: 800,
     minHeight: 500,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      sandbox: false,
     },
   });
 
@@ -132,6 +140,16 @@ ipcMain.on("close-settings-window", event => {
   const window = BrowserWindow.fromWebContents(sender);
   if (window) {
     window.close();
+  }
+});
+
+// Add handler for reading prompt files
+ipcMain.handle("read-prompt-file", async (event, filename) => {
+  const promptPath = path.join(__dirname, "..", "prompts", filename);
+  try {
+    return fs.readFileSync(promptPath, "utf8");
+  } catch (error) {
+    throw new Error(`Failed to read prompt file: ${error.message}`);
   }
 });
 
@@ -189,10 +207,22 @@ ipcMain.handle("load-settings", async event => {
     "miniloom",
     "settings.json"
   );
+  console.log("Loading settings from:", miniLoomSettingsFilePath);
+
   let settings;
   if (fs.existsSync(miniLoomSettingsFilePath)) {
     settings = fs.readFileSync(miniLoomSettingsFilePath, "utf8");
-    return JSON.parse(settings);
+    const parsedSettings = JSON.parse(settings);
+    console.log("Settings loaded successfully:", parsedSettings);
+    return parsedSettings;
+  } else {
+    // Return empty settings object if file doesn't exist
+    console.log("Settings file doesn't exist, returning empty settings");
+    return {
+      services: {},
+      samplers: {},
+      "api-keys": {},
+    };
   }
 });
 

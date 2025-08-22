@@ -1,6 +1,4 @@
-// Import MiniSearch since it's not available globally
-// const MiniSearch = require("minisearch");
-
+// MiniSearch is available through window.electronAPI
 let searchIndex = null;
 let searchResultsMode = false;
 let currentSearchQuery = "";
@@ -39,13 +37,13 @@ const searchEvents = {
 };
 
 function addNodeToSearchIndex(node) {
-  if (!searchIndex || !node) return;
+  if (!node) return;
 
   const patchContent = extractPatchContent(node.patch);
   if (!patchContent.trim() && !node.summary) return;
 
   try {
-    searchIndex.add({
+    window.electronAPI.searchIndexAdd({
       id: node.id,
       content: patchContent,
       summary: node.summary || "",
@@ -59,27 +57,33 @@ function addNodeToSearchIndex(node) {
 }
 
 function initializeSearchIndex() {
-  searchIndex = new MiniSearch({
-    fields: ["content", "summary", "type"],
-    storeFields: ["content", "summary", "type", "timestamp", "fullContent"],
-    searchOptions: {
-      boost: {
-        content: 3,
-        summary: 2,
-        type: 1,
+  try {
+    // Use the safe API to create MiniSearch instance
+    searchIndex = window.electronAPI.createMiniSearch({
+      fields: ["content", "summary", "type"],
+      storeFields: ["content", "summary", "type", "timestamp", "fullContent"],
+      searchOptions: {
+        boost: {
+          content: 3,
+          summary: 2,
+          type: 1,
+        },
+        prefix: true,
+        fuzzy: 0.2,
       },
-      prefix: true,
-      fuzzy: 0.2,
-    },
-  });
+    });
 
-  // Add all existing nodes to the index
-  Object.keys(loomTree.nodeStore).forEach(nodeId => {
-    const node = loomTree.nodeStore[nodeId];
-    if (node) {
-      addNodeToSearchIndex(node);
-    }
-  });
+    // Add all existing nodes to the index
+    Object.keys(loomTree.nodeStore).forEach(nodeId => {
+      const node = loomTree.nodeStore[nodeId];
+      if (node) {
+        addNodeToSearchIndex(node);
+      }
+    });
+  } catch (error) {
+    console.error("Failed to initialize search index:", error);
+    searchIndex = null;
+  }
 }
 
 // Extract meaningful content from diff patches
@@ -110,12 +114,12 @@ function extractPatchContent(patch) {
 }
 
 function performSearch(query) {
-  if (!searchIndex || !query.trim()) {
+  if (!query.trim()) {
     return [];
   }
 
   try {
-    const results = searchIndex.search(query, {
+    const results = window.electronAPI.searchIndexSearch(query, {
       boost: {
         content: 3,
         summary: 2,
@@ -144,12 +148,12 @@ function performSearch(query) {
 }
 
 function getSearchSuggestions(query) {
-  if (!searchIndex || !query.trim()) {
+  if (!query.trim()) {
     return [];
   }
 
   try {
-    return searchIndex.autoSuggest(query, {
+    return window.electronAPI.searchIndexAutoSuggest(query, {
       fuzzy: 0.3,
       prefix: true,
     });
@@ -278,6 +282,11 @@ function initializeSearchInput() {
   document.addEventListener("click", e => {
     if (searchContainer && !searchContainer.contains(e.target)) {
       hideSuggestions(suggestionsContainer);
+
+      // Clear search and restore tree view when clicking outside
+      if (searchResultsMode) {
+        searchEvents.emit("search-query", { query: "", isActive: false });
+      }
     }
   });
 }
@@ -328,7 +337,6 @@ function updateSuggestionHighlight(suggestions, index) {
 
 // Public API for main app to interact with search
 window.searchManager = {
-  // Initialize search
   init() {
     initializeSearchInput();
     initializeSearchIndex();
@@ -342,7 +350,23 @@ window.searchManager = {
       // Call main app functions directly (they're global)
       if (typeof changeFocus === "function") {
         changeFocus(nodeId);
+      } else {
+        console.warn("changeFocus function not available");
       }
+
+      // Also try to restore the tree view
+      const treeView = document.getElementById("loom-tree-view");
+      if (treeView) {
+        treeView.style.display = "block";
+      }
+
+      // Hide search results
+      const noResultsElement = document.getElementById("search-no-results");
+      const resultsContainer = document.getElementById(
+        "search-results-container"
+      );
+      if (noResultsElement) noResultsElement.style.display = "none";
+      if (resultsContainer) resultsContainer.style.display = "none";
     });
 
     searchEvents.on("search-query", data => {
@@ -388,13 +412,13 @@ window.searchManager = {
 
   // Add a node to search index
   addNode(node) {
-    if (!searchIndex || !node) return;
+    if (!node) return;
 
     const patchContent = extractPatchContent(node.patch);
     if (!patchContent.trim() && !node.summary) return;
 
     try {
-      searchIndex.add({
+      window.electronAPI.searchIndexAdd({
         id: node.id,
         content: patchContent,
         summary: node.summary || "",
@@ -409,10 +433,10 @@ window.searchManager = {
 
   // Update a node in search index
   updateNode(node) {
-    if (!searchIndex || !node) return;
+    if (!node) return;
 
     try {
-      searchIndex.replace({
+      window.electronAPI.searchIndexReplace({
         id: node.id,
         content: extractPatchContent(node.patch),
         summary: node.summary || "",
@@ -427,10 +451,8 @@ window.searchManager = {
 
   // Remove a node from search index
   removeNode(node) {
-    if (!searchIndex) return;
-
     try {
-      searchIndex.remove(node);
+      window.electronAPI.searchIndexRemove(node);
     } catch (error) {
       console.warn("Error removing node from search index:", error);
     }
@@ -438,15 +460,13 @@ window.searchManager = {
 
   // Rebuild search index (for when tree is reloaded)
   rebuildIndex() {
-    if (searchIndex) {
-      searchIndex.removeAll();
-      Object.keys(loomTree.nodeStore).forEach(nodeId => {
-        const node = loomTree.nodeStore[nodeId];
-        if (node) {
-          this.addNode(node);
-        }
-      });
-    }
+    window.electronAPI.searchIndexRemoveAll();
+    Object.keys(loomTree.nodeStore).forEach(nodeId => {
+      const node = loomTree.nodeStore[nodeId];
+      if (node) {
+        this.addNode(node);
+      }
+    });
   },
 
   getSearchState() {

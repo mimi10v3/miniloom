@@ -1,3 +1,6 @@
+![vector art logo of the brain patterned in the style of a pictorial history of
+Portuguese textiles, painted in the 1700s. With the logotext "MiniHF"](assets/minihf_logo_no_text.png)
+
 # MiniLoom
 
 MiniLoom is an AI text generation tool built with Electron, providing a desktop application for text generation and manipulation.
@@ -20,7 +23,7 @@ MiniLoom is an AI text generation tool built with Electron, providing a desktop 
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/JD-P/miniloom.git
 cd miniloom
 ```
 

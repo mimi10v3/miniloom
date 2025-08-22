@@ -1,4 +1,4 @@
-const { ipcRenderer } = require("electron");
+// No require statements needed - using window.electronAPI from preload script
 
 const servicesTab = document.getElementById("services-tab");
 const samplersTab = document.getElementById("samplers-tab");
@@ -66,21 +66,23 @@ function getDefaultSampler() {
   return { ...DEFAULT_SAMPLER };
 }
 
-function loadSettings() {
-  return ipcRenderer
-    .invoke("load-settings")
-    .then(data => {
-      if (data != null) {
-        samplerSettingsStore = data;
-      }
-    })
-    .catch(err => console.error("Load Settings Error:", err));
+async function loadSettings() {
+  try {
+    const data = await window.electronAPI.loadSettings();
+    if (data != null) {
+      samplerSettingsStore = data;
+    }
+  } catch (err) {
+    console.error("Load Settings Error:", err);
+  }
 }
 
-function persistStore() {
-  return ipcRenderer
-    .invoke("save-settings", samplerSettingsStore)
-    .catch(err => console.error("Settings save Error:", err));
+async function persistStore() {
+  try {
+    await window.electronAPI.saveSettings(samplerSettingsStore);
+  } catch (err) {
+    console.error("Settings save Error:", err);
+  }
 }
 
 function getServicesObject() {
@@ -665,7 +667,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const closeBtn = document.getElementById("close-settings");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
-      ipcRenderer.send("close-settings-window");
+      window.electronAPI.closeSettingsWindow();
     });
   }
 });

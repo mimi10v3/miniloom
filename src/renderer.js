@@ -1,10 +1,7 @@
-const fs = require("fs");
-const path = require("path");
-const { ipcRenderer } = require("electron");
-const DiffMatchPatch = require("diff-match-patch");
-const dmp = new DiffMatchPatch();
-const MiniSearch = require("minisearch");
-// Remove the require for utils.js since it's loaded as a script tag
+const dmp = {
+  patch_make: window.electronAPI.patch_make,
+  patch_apply: window.electronAPI.patch_apply,
+};
 
 const editor = document.getElementById("editor");
 const promptTokenCounter = document.getElementById("prompt-token-counter");
@@ -42,7 +39,6 @@ class LoomTree {
     parent.children.push(newNodeId);
     this.nodeStore[newNodeId] = newNode;
 
-    // Notify search manager if available
     if (window.searchManager && window.searchManager.addNode) {
       window.searchManager.addNode(newNode);
     }
@@ -51,12 +47,13 @@ class LoomTree {
   }
 
   updateNode(node, text, summary) {
-    // Update a user written leaf
     if (node.type == "gen") {
       return;
     } else if (node.children.length > 0) {
       return;
     }
+
+    // Update a user written leaf
     const parent = this.nodeStore[node.parent];
     const parentRenderedText = this.renderNode(parent);
     const patch = dmp.patch_make(parentRenderedText, text);
@@ -64,7 +61,6 @@ class LoomTree {
     node.patch = patch;
     node.summary = summary;
 
-    // Notify search manager if available
     if (window.searchManager && window.searchManager.updateNode) {
       window.searchManager.updateNode(node);
     }
@@ -92,11 +88,6 @@ class LoomTree {
       }
       var [outText, results] = dmp.patch_apply(patch, outText);
     }
-    /* Disable cache: Not worth the filesize increase
-	if (cacheNode.children.length > 0) {
-	    cacheNode.cache = outText;
-	}
-	*/
     return outText;
   }
 
@@ -187,7 +178,6 @@ function createTreeLi(node, index, isMaxDepth, parentIds) {
     changeFocus(node.id);
   };
 
-  // Add thumb span for rating display
   const thumbSpan = document.createElement("span");
   thumbSpan.classList.add("tree-thumb");
   if (node.rating === true) {
@@ -198,7 +188,6 @@ function createTreeLi(node, index, isMaxDepth, parentIds) {
     thumbSpan.textContent = " 👎";
   }
 
-  // Put both link and thumb inside the link so they're part of the selection
   link.appendChild(thumbSpan);
   nodeSpan.append(link);
   li.append(nodeSpan);
@@ -230,30 +219,10 @@ function renderTick() {
   const batchIndexMarker = document.getElementById("batch-item-index");
   batchIndexMarker.textContent = `${selection + 1}/${batchLimit + 1}`;
 
-  const controls = document.getElementById("controls");
-
-  const oldBranchControlsDiv = document.getElementById(
-    "prompt-branch-controls"
-  );
-  if (oldBranchControlsDiv) {
-    oldBranchControlsDiv.innerHTML = "";
-    oldBranchControlsDiv.remove();
-  }
-
-  const branchControlsDiv = document.createElement("div");
-  branchControlsDiv.id = "prompt-branch-controls";
-  branchControlsDiv.classList.add("branch-controls");
-
-  const branchControlButtonsDiv = document.createElement("div");
-  branchControlButtonsDiv.classList.add("branch-control-buttons");
-
   const generateButton = document.getElementById("generate-button");
   if (generateButton) {
     generateButton.onclick = () => reroll(focus.id, false);
   }
-
-  branchControlsDiv.append(branchControlButtonsDiv);
-  controls.append(branchControlsDiv);
 
   focus.read = true;
   loomTreeView.innerHTML = "";
@@ -275,8 +244,6 @@ function changeFocus(newFocusId) {
     editor.selectionStart = editor.value.length;
     editor.selectionEnd = editor.value.length;
     editor.focus();
-    // Ensure thumb state is updated after renderTick
-    setTimeout(() => updateThumbState(), 0);
   }
 }
 
@@ -392,13 +359,10 @@ async function getResponses(
 async function getSummary(taskText) {
   const params = prepareRollParams();
   const endpoint = params["api-url"];
-  const summarizePromptPath = path.join(
-    __dirname,
-    "..",
-    "prompts",
-    "summarize.txt"
-  );
-  const summarizePromptTemplate = fs.readFileSync(summarizePromptPath, "utf8");
+
+  // Use safe API to read prompt file
+  const summarizePromptTemplate =
+    await window.electronAPI.readPromptFile("summarize.txt");
   const summarizePrompt = summarizePromptTemplate.replace(
     "{MODEL_NAME}",
     params["model-name"]
@@ -502,13 +466,9 @@ async function getSummary(taskText) {
 async function rewriteNode(id) {
   const endpoint = document.getElementById("api-url").value;
   const rewriteNodePrompt = document.getElementById("rewrite-node-prompt");
-  const rewritePromptPath = path.join(
-    __dirname,
-    "..",
-    "prompts",
-    "rewrite.txt"
-  );
-  const rewritePrompt = fs.readFileSync(rewritePromptPath, "utf8");
+
+  // Use safe API to read prompt file
+  const rewritePrompt = await window.electronAPI.readPromptFile("rewrite.txt");
   const rewriteFeedback = rewriteNodePrompt.value;
   const rewriteContext = editor.value;
 
@@ -814,7 +774,8 @@ async function togetherRoll(id, api = "openai") {
   const rollFocus = loomTree.nodeStore[id];
   const lastChildIndex =
     rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-  let prompt = loomTree.renderNode(rollFocus);
+  // Use current editor content instead of rendered tree content
+  let prompt = editor.value;
   const params = prepareRollParams();
 
   const apiDelay = params["api-delay"];
@@ -1053,20 +1014,22 @@ editor.addEventListener("keydown", async e => {
   }
 });
 
-function saveFile() {
+async function saveFile() {
   const data = {
     loomTree,
     focus: focus,
   };
-  ipcRenderer
-    .invoke("save-file", data)
-    .catch(err => console.error("Save File Error:", err));
+  try {
+    await window.electronAPI.saveFile(data);
+  } catch (err) {
+    console.error("Save File Error:", err);
+  }
 }
 
-function loadFile() {
-  return ipcRenderer
-    .invoke("load-file")
-    .then(data => {
+async function loadFile() {
+  try {
+    const data = await window.electronAPI.loadFile();
+    if (data) {
       loomTreeRaw = data.loomTree;
       loomTree = Object.assign(new LoomTree(), loomTreeRaw);
       focus = loomTree.nodeStore[data.focus.id];
@@ -1077,20 +1040,23 @@ function loadFile() {
       }
 
       renderTick();
-      updateThumbState();
-    })
-    .catch(err => console.error("Load File Error:", err));
+    }
+  } catch (err) {
+    console.error("Load File Error:", err);
+  }
 }
 
-function autoSave() {
+async function autoSave() {
   const data = {
     loomTree,
     focus: focus,
     samplerSettingsStore: samplerSettingsStore,
   };
-  ipcRenderer
-    .invoke("auto-save", data)
-    .catch(err => console.error("Auto-save Error:", err));
+  try {
+    await window.electronAPI.autoSave(data);
+  } catch (err) {
+    console.error("Auto-save Error:", err);
+  }
 }
 
 var secondsSinceLastSave = 0;
@@ -1103,23 +1069,25 @@ async function autoSaveTick() {
   }
 }
 
-ipcRenderer.on("update-filename", (event, filename, creationTime, filePath) => {
-  const filenameElement = document.getElementById("current-filename");
-  if (filenameElement) {
-    filenameElement.innerHTML = `💾 ${filename}`;
+window.electronAPI.onUpdateFilename(
+  (event, filename, creationTime, filePath) => {
+    const filenameElement = document.getElementById("current-filename");
+    if (filenameElement) {
+      filenameElement.innerHTML = `💾 ${filename}`;
 
-    if (creationTime) {
-      const formattedTime = new Date(creationTime).toLocaleString();
-      filenameElement.title = `File: ${filePath || "Unknown"}
+      if (creationTime) {
+        const formattedTime = new Date(creationTime).toLocaleString();
+        filenameElement.title = `File: ${filePath || "Unknown"}
 Created: ${formattedTime}`;
-    } else {
-      filenameElement.title = `File: ${filePath || "Unknown"}`;
+      } else {
+        filenameElement.title = `File: ${filePath || "Unknown"}`;
+      }
     }
   }
-});
+);
 const onSettingsUpdated = async () => {
   try {
-    const data = await ipcRenderer.invoke("load-settings");
+    const data = await window.electronAPI.loadSettings();
     if (data != null) {
       samplerSettingsStore = data;
       console.log("Settings updated, new data:", data);
@@ -1135,10 +1103,7 @@ const onSettingsUpdated = async () => {
   }
 };
 
-// attach once on startup
-document.addEventListener("DOMContentLoaded", () => {
-  ipcRenderer.on("settings-updated", onSettingsUpdated);
-});
+// Settings event listener will be set up in init() function
 
 async function updateFocusSummary() {
   if (focus.type == "user" && focus.children.length == 0 && !updatingNode) {
@@ -1161,7 +1126,7 @@ async function updateFocusSummary() {
 
 var autoSaveIntervalId = setInterval(autoSaveTick, 1000);
 
-ipcRenderer.on("invoke-action", (event, action) => {
+window.electronAPI.onInvokeAction((event, action) => {
   switch (action) {
     case "save-file":
       saveFile();
@@ -1186,50 +1151,71 @@ function isValidChatJson(text) {
 
 editor.addEventListener("contextmenu", e => {
   e.preventDefault();
-  ipcRenderer.send("show-context-menu");
+  window.electronAPI.showContextMenu();
 });
 
 let samplerSettingsStore;
 
-function loadSettings() {
-  return ipcRenderer
-    .invoke("load-settings")
-    .then(data => {
-      if (data != null) {
-        samplerSettingsStore = data;
-      }
-    })
-    .catch(err => console.error("Load Settings Error:", err));
+async function loadSettings() {
+  try {
+    console.log("Loading settings...");
+    const data = await window.electronAPI.loadSettings();
+    console.log("Settings data received:", data);
+    if (data != null) {
+      samplerSettingsStore = data;
+      console.log("Settings stored successfully");
+    } else {
+      console.log("No settings data received, using empty store");
+      samplerSettingsStore = {};
+    }
+  } catch (err) {
+    console.error("Load Settings Error:", err);
+    samplerSettingsStore = {};
+  }
 }
 
 async function init() {
-  await loadSettings();
+  try {
+    console.log("Starting initialization...");
+    await loadSettings();
+    console.log("Settings loaded:", samplerSettingsStore);
 
-  // Populate the new Services and Samplers selectors
-  populateServiceSelector();
-  populateSamplerSelector();
-  populateApiKeySelector();
+    // Set up settings event listener
+    window.electronAPI.onSettingsUpdated(onSettingsUpdated);
 
-  // Add click handlers to thumbs
-  const thumbUp = document.getElementById("thumb-up");
-  const thumbDown = document.getElementById("thumb-down");
+    // Populate the new Services and Samplers selectors
+    populateServiceSelector();
+    populateSamplerSelector();
+    populateApiKeySelector();
 
-  if (thumbUp) {
-    thumbUp.onclick = () => promptThumbsUp(focus.id);
+    // Add click handlers to thumbs
+    const thumbUp = document.getElementById("thumb-up");
+    const thumbDown = document.getElementById("thumb-down");
+
+    if (thumbUp) {
+      thumbUp.onclick = () => promptThumbsUp(focus.id);
+    }
+    if (thumbDown) {
+      thumbDown.onclick = () => promptThumbsDown(focus.id);
+    }
+
+    renderTick();
+
+    // Update initial thumb state
+    updateThumbState();
+    console.log("Initialization complete");
+  } catch (error) {
+    console.error("Initialization failed:", error);
   }
-  if (thumbDown) {
-    thumbDown.onclick = () => promptThumbsDown(focus.id);
-  }
-
-  renderTick();
-
-  // Update initial thumb state
-  updateThumbState();
 }
 
 function populateServiceSelector() {
   const serviceSelector = document.getElementById("service-selector");
-  if (!serviceSelector) return;
+  console.log("Service selector element:", serviceSelector);
+  if (!serviceSelector) {
+    console.warn("Service selector not found!");
+    return;
+  }
 
   // Remember current selection
   const currentSelection = serviceSelector.value;
@@ -1239,6 +1225,7 @@ function populateServiceSelector() {
   serviceSelector.innerHTML =
     '<option value="">-- Select a service --</option>';
 
+  console.log("samplerSettingsStore:", samplerSettingsStore);
   if (samplerSettingsStore && samplerSettingsStore.services) {
     const services = Object.keys(samplerSettingsStore.services);
     console.log("Available services:", services);
@@ -1248,6 +1235,8 @@ function populateServiceSelector() {
       option.textContent = serviceName;
       serviceSelector.appendChild(option);
     });
+  } else {
+    console.log("No services found in settings store");
   }
 
   // Restore selection if it still exists
@@ -1266,7 +1255,11 @@ function populateServiceSelector() {
 
 function populateSamplerSelector() {
   const samplerSelector = document.getElementById("sampler-selector");
-  if (!samplerSelector) return;
+  console.log("Sampler selector element:", samplerSelector);
+  if (!samplerSelector) {
+    console.warn("Sampler selector not found!");
+    return;
+  }
 
   // Remember current selection
   const currentSelection = samplerSelector.value;
@@ -1298,7 +1291,11 @@ function populateSamplerSelector() {
 
 function populateApiKeySelector() {
   const apiKeySelector = document.getElementById("api-key-selector");
-  if (!apiKeySelector) return;
+  console.log("API key selector element:", apiKeySelector);
+  if (!apiKeySelector) {
+    console.warn("API key selector not found!");
+    return;
+  }
 
   // Remember current selection
   const currentSelection = apiKeySelector.value;
@@ -1326,5 +1323,9 @@ function populateApiKeySelector() {
     apiKeySelector.value = currentSelection;
   }
 }
-init();
-updateCounterDisplay(editor.value || "");
+// Wait for DOM to be ready before initializing
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("DOM loaded, starting initialization...");
+  init();
+  updateCounterDisplay(editor.value || "");
+});
