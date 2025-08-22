@@ -3,22 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <title>Sampler Settings</title>
+    <link rel="stylesheet" href="main.css" />
     <style>
-      :root {
-        --barn-red: #750504ff;
-        --black-olive: #293121ff;
-        --oxford-blue: #142b4fff;
-        --night: #0d0e10ff;
-        --engineering-orange: #d50402ff;
-      }
-
       body {
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         margin: 0;
         padding: 0;
-        background-color: #f8f9fa;
-        color: var(--night);
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
         height: 100vh;
         overflow: hidden;
       }
@@ -26,7 +19,7 @@
       #settings-pane {
         width: 100%;
         height: 100vh;
-        background-color: white;
+        background-color: var(--bg-primary);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -40,22 +33,22 @@
 
       #settings-tabs {
         display: flex;
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #e9ecef;
-        padding: 0 16px;
+        background-color: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-primary);
+        padding: 0 var(--spacing-lg);
         margin: 0;
         height: 48px;
         align-items: center;
       }
 
       .tab-btn {
-        padding: 12px 20px;
+        padding: var(--spacing-md) var(--spacing-lg);
         background: none;
         border: none;
         cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        color: #6c757d;
+        font-size: var(--font-size-base);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-secondary);
         border-bottom: 3px solid transparent;
         transition: none;
         border-radius: 0;
@@ -64,227 +57,77 @@
       }
 
       .tab-btn:hover {
-        background-color: rgba(0, 0, 0, 0.02);
-        color: #495057;
+        background-color: var(--bg-hover);
+        color: var(--text-primary);
       }
 
       .tab-btn.active {
-        color: #333;
-        border-bottom-color: #007bff;
-        background-color: white;
-        font-weight: 600;
-        box-shadow: 0 1px 0 0 white;
+        color: var(--text-primary);
+        border-bottom-color: var(--button-secondary);
+        background-color: var(--bg-primary);
+        font-weight: var(--font-weight-semibold);
+        box-shadow: 0 1px 0 0 var(--bg-primary);
       }
 
       /* Small table-ish layout helpers */
       .row {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin-bottom: 16px;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-lg);
       }
       .row label {
-        font-weight: 500;
-        color: #333;
+        font-weight: var(--font-weight-medium);
+        color: var(--text-primary);
         min-width: 90px;
-        font-size: 14px;
+        font-size: var(--font-size-base);
       }
       .divider {
         height: 1px;
-        background-color: #e9ecef;
-        margin: 4px 0 12px 0;
+        background-color: var(--border-primary);
+        margin: var(--spacing-xs) 0 var(--spacing-md) 0;
       }
       .btn {
         padding: 6px 12px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border-secondary);
         border-radius: 4px;
-        background-color: white;
-        color: #333;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
         font-size: 13px;
         cursor: pointer;
         transition: all 0.2s;
         font-weight: 500;
       }
       .btn:hover {
-        background-color: #f8f9fa;
-        border-color: #adb5bd;
+        background-color: var(--bg-secondary);
+        border-color: var(--border-hover);
       }
       .btn.primary {
-        background-color: #007bff;
-        border-color: #007bff;
+        background-color: var(--button-secondary);
+        border-color: var(--button-secondary);
         color: white;
       }
       .btn.primary:hover {
-        background-color: #0056b3;
-        border-color: #0056b3;
+        background-color: var(--button-secondary-hover);
+        border-color: var(--button-secondary-hover);
       }
 
-      /* Footer styles for success/error messages */
-      #footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        padding: 8px 16px;
-        font-size: 14px;
-        font-weight: 500;
-        text-align: center;
-        z-index: 1000;
-        transition: all 0.3s ease;
-        opacity: 0;
-        transform: translateY(100%);
-        pointer-events: none;
-      }
-
-      #footer.success {
-        background-color: #d4edda;
-        color: #155724;
-        border-top: 1px solid #c3e6cb;
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      #footer.error {
-        background-color: #f8d7da;
-        color: #721c24;
-        border-top: 1px solid #f5c6cb;
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      #footer:not(:empty) {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      /* Footer styles for success/error messages - now using CSS variables from main.css */
       .muted {
         opacity: 0.7;
         font-size: 0.9em;
-        color: #666;
+        color: var(--text-secondary);
       }
-      table.keys {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 8px;
-      }
-      table.keys th,
-      table.keys td {
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        padding: 8px;
-        text-align: left;
-      }
+      /* Table styles now using CSS variables from main.css */
       .mono {
         font-family:
           ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
           monospace;
       }
 
-      /* Close button styles */
-      .close-btn {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: white;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        color: #666;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        transition: all 0.2s;
-        font-weight: 300;
-        z-index: 10;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-      }
+      /* Close button styles - now using CSS variables from main.css */
 
-      .close-btn:hover {
-        background-color: rgba(0, 0, 0, 0.08);
-        color: #333;
-      }
-
-      .close-btn:active {
-        background: #d0d0d0;
-      }
-
-      /* Form field styles */
-      .form-field {
-        margin-bottom: 20px;
-      }
-
-      .form-field label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: 500;
-        color: var(--night);
-        font-size: 14px;
-        min-width: 100px;
-      }
-
-      .form-field input {
-        width: 350px !important;
-        padding: 12px;
-        border: 1px solid rgba(0, 0, 0, 0.2);
-        border-radius: 6px;
-        font-size: 14px;
-        color: #333;
-        transition: all 0.2s ease;
-        box-sizing: border-box;
-      }
-
-      .form-field input:focus {
-        outline: none;
-        border-color: #007bff;
-        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-      }
-
-      .form-field input:hover {
-        border-color: #adb5bd;
-      }
-
-      .form-field input::placeholder {
-        color: #999;
-      }
-
-      .form-row {
-        display: flex;
-        gap: 20px;
-        margin-bottom: 20px;
-      }
-
-      .form-row .form-field {
-        flex: 1;
-        margin-bottom: 0;
-      }
-
-      .form-row label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: 500;
-        font-size: 14px;
-        color: var(--night);
-      }
-
-      .form-row input,
-      .form-row select {
-        width: 350px !important;
-        min-width: 350px !important;
-        padding: 12px;
-        border: 1px solid rgba(0, 0, 0, 0.2);
-        border-radius: 6px;
-        font-size: 14px;
-        transition: all 0.2s ease;
-        box-sizing: border-box;
-      }
-
-      .form-row input:focus,
-      .form-row select:focus {
-        outline: none;
-        border-color: var(--engineering-orange);
-        box-shadow: 0 0 0 1px rgba(213, 4, 2, 0.2);
-      }
+      /* Form field styles - now using CSS variables from main.css */
 
       /* Tab visibility */
       .tab-content {
@@ -308,32 +151,32 @@
 
       .row label {
         font-weight: 500;
-        color: #333;
+        color: var(--text-primary);
         min-width: 90px;
         font-size: 14px;
       }
 
       .footer {
         height: 40px;
-        background-color: #f8f9fa;
-        border-top: 1px solid #e9ecef;
+        background-color: var(--bg-secondary);
+        border-top: 1px solid var(--border-primary);
         display: flex;
         align-items: center;
         padding: 0 20px;
         font-size: 13px;
-        color: #666;
+        color: var(--text-secondary);
       }
 
       .footer.success {
-        color: #28a745;
-        background-color: #d4edda;
-        border-top-color: #c3e6cb;
+        color: var(--success);
+        background-color: var(--success-bg);
+        border-top-color: var(--success-border);
       }
 
       .footer.error {
-        color: #dc3545;
-        background-color: #f8d7da;
-        border-top-color: #f5c6cb;
+        color: var(--error);
+        background-color: var(--error-bg);
+        border-top-color: var(--error-border);
       }
 
       /* Tab content styling */
@@ -343,7 +186,7 @@
 
       .tab-content .row label {
         font-weight: 500;
-        color: var(--night);
+        color: var(--text-primary);
         min-width: 100px;
         margin-bottom: 0;
       }
@@ -368,7 +211,7 @@
         display: inline-block;
         width: 16px;
         height: 16px;
-        background-color: #6c757d;
+        background-color: var(--text-secondary);
         color: white;
         border-radius: 50%;
         text-align: center;
@@ -382,7 +225,7 @@
       }
 
       .help-icon:hover {
-        background-color: #495057;
+        background-color: var(--text-primary);
       }
 
       #key-name {
@@ -401,7 +244,7 @@
         gap: 8px;
         margin-top: 16px;
         padding-top: 12px;
-        border-top: 1px solid #e9ecef;
+        border-top: 1px solid var(--border-primary);
       }
 
       .form-actions .btn {
@@ -440,28 +283,28 @@
       }
 
       .form-field input::placeholder {
-        color: #999;
+        color: var(--text-muted);
       }
 
       select {
         padding: 6px 10px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border-secondary);
         border-radius: 4px;
-        background-color: white;
+        background-color: var(--bg-primary);
         font-size: 14px;
-        color: #333;
+        color: var(--text-primary);
         cursor: pointer;
         transition: border-color 0.2s;
       }
 
       select:focus {
         outline: none;
-        border-color: #007bff;
-        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        border-color: var(--button-secondary);
+        box-shadow: 0 0 0 2px var(--shadow-focus);
       }
 
       select:hover {
-        border-color: #adb5bd;
+        border-color: var(--border-hover);
       }
 
       /* API Keys table styling */
@@ -481,14 +324,51 @@
       }
       table.keys th {
         font-weight: 600;
-        color: var(--night);
-        background-color: #f8f9fa;
+        color: var(--text-primary);
+        background-color: var(--bg-secondary);
       }
       table.keys td {
-        color: var(--night);
+        color: var(--text-primary);
+      }
+      /* Force wrapping for secret column */
+      table.keys td:nth-child(2) {
+        max-width: 300px;
+        word-wrap: break-word;
+        word-break: break-all;
+        overflow-wrap: break-word;
       }
       .mono {
         font-family: inherit;
+      }
+
+      /* Welcome message styling */
+      #welcome-message {
+        background: linear-gradient(
+          135deg,
+          var(--gradient-primary) 0%,
+          var(--gradient-secondary) 100%
+        );
+        color: white;
+        padding: 20px;
+        margin: 0;
+        text-align: center;
+      }
+
+      #welcome-message h2 {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+      }
+
+      #welcome-message p {
+        margin: 0 0 15px 0;
+        font-size: 16px;
+        opacity: 0.9;
+      }
+
+      #welcome-message p:last-child {
+        margin: 0;
+        font-size: 14px;
+        opacity: 0.8;
       }
     </style>
   </head>
@@ -499,7 +379,11 @@
         id="welcome-message"
         style="
           display: none;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(
+            135deg,
+            var(--gradient-primary) 0%,
+            var(--gradient-secondary) 100%
+          );
           color: white;
           padding: 20px;
           margin: 0;

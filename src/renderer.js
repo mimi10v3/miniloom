@@ -427,9 +427,33 @@ async function getSummary(taskText) {
   } // TODO: Figure out how I might have to change this if I end up supporting
   // multiple APIs
   else if (params["sampling-method"] == "openai-chat") {
-    r = await fetch(endpoint, {
-      method: "POST",
-      body: JSON.stringify({
+    // Check if this is Anthropic API
+    const isAnthropic = endpoint.includes("api.anthropic.com");
+
+    let requestUrl = endpoint;
+    let headers = {
+      "Content-type": "application/json; charset=UTF-8",
+    };
+    let requestBody;
+
+    if (isAnthropic) {
+      // Anthropic API format
+      requestUrl = "https://api.anthropic.com/v1/messages";
+      headers["x-api-key"] = params["api-key"];
+      headers["anthropic-version"] = "2023-06-01";
+
+      requestBody = {
+        model: params["model-name"],
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 10,
+        temperature: params["temperature"],
+        top_p: params["top-p"],
+      };
+    } else {
+      // OpenAI format
+      headers.Authorization = `Bearer ${params["api-key"]}`;
+
+      requestBody = {
         messages: [{ role: "system", content: prompt }],
         model: params["model-name"],
         max_tokens: 10,
@@ -437,18 +461,53 @@ async function getSummary(taskText) {
         top_p: params["top-p"],
         top_k: params["top-k"],
         repetition_penalty: params["repetition-penalty"],
-      }),
-      headers: {
-        "Content-type": "application/json; charset=UTF-8",
-      },
+      };
+    }
+
+    r = await fetch(requestUrl, {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+      headers: headers,
     });
-    let batch = await r.json();
-    return batch.choices[0]["message"]["content"]
-      .trim()
-      .split("\n")[0]
-      .split(" ")
-      .slice(0, 3)
-      .join(" ");
+
+    if (!r.ok) {
+      let errorMessage = r.statusText;
+      try {
+        const errorData = await r.json();
+        errorMessage = errorData.error?.message || errorMessage;
+      } catch (jsonError) {
+        try {
+          const errorText = await r.text();
+          errorMessage = errorText || errorMessage;
+        } catch (textError) {
+          errorMessage = r.statusText;
+        }
+      }
+      throw new Error(`API Error: ${errorMessage}`);
+    }
+
+    let batch;
+    try {
+      batch = await r.json();
+    } catch (jsonError) {
+      throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
+    }
+
+    if (isAnthropic) {
+      return batch.content[0].text
+        .trim()
+        .split("\n")[0]
+        .split(" ")
+        .slice(0, 3)
+        .join(" ");
+    } else {
+      return batch.choices[0]["message"]["content"]
+        .trim()
+        .split("\n")[0]
+        .split(" ")
+        .slice(0, 3)
+        .join(" ");
+    }
   } else {
     const tp = {
       "api-key": params["api-key"],
@@ -895,52 +954,92 @@ async function openaiChatCompletionsRoll(id) {
     const outputBranches = parseInt(params["output-branches"]);
     const tokensPerBranch = parseInt(params["tokens-per-branch"]);
 
+    // Check if this is Anthropic API
+    const isAnthropic = params["api-url"].includes("api.anthropic.com");
+
     // Prepare the API request
-    const requestBody = {
-      model: modelName,
-      messages: chatData.messages,
-      max_tokens: tokensPerBranch,
-      temperature: temperature,
-      top_p: topP,
-      n: outputBranches,
+    let requestBody;
+    let requestUrl = params["api-url"];
+    let headers = {
+      "Content-Type": "application/json",
     };
 
+    if (isAnthropic) {
+      // Anthropic API format
+      requestUrl = "https://api.anthropic.com/v1/messages";
+      headers["x-api-key"] = apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+
+      requestBody = {
+        model: modelName,
+        messages: chatData.messages,
+        max_tokens: tokensPerBranch,
+        temperature: temperature,
+        top_p: topP,
+      };
+    } else {
+      // OpenAI format
+      headers.Authorization = `Bearer ${apiKey}`;
+
+      requestBody = {
+        model: modelName,
+        messages: chatData.messages,
+        max_tokens: tokensPerBranch,
+        temperature: temperature,
+        top_p: topP,
+        n: outputBranches,
+      };
+    }
+
     // Make the API call
-    const response = await fetch(params["api-url"], {
+    const response = await fetch(requestUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: headers,
       body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `OpenAI API Error: ${errorData.error?.message || response.statusText}`
-      );
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || errorMessage;
+      } catch (jsonError) {
+        // If response is not JSON, try to get text content
+        try {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        } catch (textError) {
+          // If we can't even get text, use status text
+          errorMessage = response.statusText;
+        }
+      }
+      throw new Error(`OpenAI API Error: ${errorMessage}`);
     }
 
-    const responseData = await response.json();
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (jsonError) {
+      throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
+    }
 
-    // Process each choice (for multiple outputs)
-    for (let i = 0; i < responseData.choices.length; i++) {
-      const choice = responseData.choices[i];
-      const assistantMessage = choice.message;
+    // Process responses based on API type
+    if (isAnthropic) {
+      // Handle Anthropic response format
+      const assistantMessage = responseData.content[0];
 
       // Create a new chat data object with the assistant's response
       const newChatData = JSON.parse(JSON.stringify(chatData)); // Deep clone
       newChatData.messages.push({
-        role: assistantMessage.role,
-        content: assistantMessage.content,
+        role: "assistant",
+        content: assistantMessage.text,
       });
 
       const newChatText = JSON.stringify(newChatData, null, 2);
 
       // Generate a summary for the new node
       const summary = await getSummary(
-        assistantMessage.content || "Assistant response"
+        assistantMessage.text || "Assistant response"
       );
 
       // Create the new node
@@ -955,7 +1054,41 @@ async function openaiChatCompletionsRoll(id) {
       loomTree.nodeStore[responseNode.id]["model"] = responseData.model;
       loomTree.nodeStore[responseNode.id]["usage"] = responseData.usage;
       loomTree.nodeStore[responseNode.id]["finish_reason"] =
-        choice.finish_reason;
+        responseData.stop_reason;
+    } else {
+      // Handle OpenAI response format
+      for (let i = 0; i < responseData.choices.length; i++) {
+        const choice = responseData.choices[i];
+        const assistantMessage = choice.message;
+
+        // Create a new chat data object with the assistant's response
+        const newChatData = JSON.parse(JSON.stringify(chatData)); // Deep clone
+        newChatData.messages.push({
+          role: assistantMessage.role,
+          content: assistantMessage.content,
+        });
+
+        const newChatText = JSON.stringify(newChatData, null, 2);
+
+        // Generate a summary for the new node
+        const summary = await getSummary(
+          assistantMessage.content || "Assistant response"
+        );
+
+        // Create the new node
+        const responseNode = loomTree.createNode(
+          "gen",
+          rollFocus,
+          newChatText,
+          summary
+        );
+
+        // Store metadata
+        loomTree.nodeStore[responseNode.id]["model"] = responseData.model;
+        loomTree.nodeStore[responseNode.id]["usage"] = responseData.usage;
+        loomTree.nodeStore[responseNode.id]["finish_reason"] =
+          choice.finish_reason;
+      }
     }
 
     // Focus on the first newly generated response, but only if we're still on the same node

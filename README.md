@@ -1,4 +1,4 @@
-<p align="center" style="font-size:48px;>
+<p align="center" style="font-size:48px;">
   <img src="assets/minihf_logo_no_text.png" alt="vector art logo of the brain patterned in the style of a pictorial history of Portuguese textiles, painted in the 1700s" width="50" height="50">
   MiniLoom
 </p>
