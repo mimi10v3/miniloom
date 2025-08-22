@@ -1,14 +1,13 @@
-// No require statements needed - using window.electronAPI from preload script
-
+// DOM Elements
 const servicesTab = document.getElementById("services-tab");
 const samplersTab = document.getElementById("samplers-tab");
 const apiKeysTab = document.getElementById("api-keys-tab");
-
 const servicesForm = document.getElementById("services-form");
 const samplersForm = document.getElementById("samplers-form");
 const serviceSelect = document.getElementById("service-select");
 const samplerSelect = document.getElementById("sampler-select");
 
+// Default configurations
 const SERVICE_DEFAULTS = {
   base: {
     "sampling-method": "base",
@@ -51,18 +50,15 @@ const DEFAULT_SAMPLER = {
   "repetition-penalty": "1",
 };
 
+// State
 let samplerSettingsStore = {};
 let currentEditingService = null;
 let currentEditingSampler = null;
 let originalServiceData = null;
 let originalSamplerData = null;
-let activeTab = "services";
+let activeTab = null;
 
-/**
- * Display a temporary success/error message in the footer
- * @param {string} message - The message to display
- * @param {string} type - The message type ('success', 'error', or default)
- */
+// Utility functions
 function flashSaved(message, type = "success") {
   const footer = document.getElementById("footer");
   if (!footer) return;
@@ -70,126 +66,123 @@ function flashSaved(message, type = "success") {
   footer.textContent = message;
   footer.className = `footer ${type}`;
 
-  // Clear the message after 3 seconds
   setTimeout(() => {
     footer.textContent = "";
     footer.className = "footer";
   }, 3000);
 }
 
-function applyServiceDefaults(serviceType) {
-  const defaults = SERVICE_DEFAULTS[serviceType] || SERVICE_DEFAULTS.base;
-  return defaults;
+function getValue(id) {
+  return document.getElementById(id)?.value?.trim() || "";
 }
 
-function getDefaultSampler() {
-  return { ...DEFAULT_SAMPLER };
+function setValue(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.value = value;
 }
 
-async function loadSettings() {
-  try {
-    const data = await window.electronAPI.loadSettings();
-    if (data != null) {
-      samplerSettingsStore = data;
-    }
-  } catch (err) {
-    console.error("Load Settings Error:", err);
+function setDisplay(id, show) {
+  const element = document.getElementById(id);
+  if (element) element.style.display = show ? "inline-block" : "none";
+}
+
+// Data access functions
+function getServices() {
+  if (!samplerSettingsStore.services) {
+    samplerSettingsStore.services = {};
   }
+  return samplerSettingsStore.services;
 }
 
-async function persistStore() {
-  try {
-    await window.electronAPI.saveSettings(samplerSettingsStore);
-  } catch (err) {
-    console.error("Settings save Error:", err);
+function getSamplers() {
+  if (!samplerSettingsStore.samplers) {
+    samplerSettingsStore.samplers = {};
   }
+  return samplerSettingsStore.samplers;
 }
 
-function getServicesObject() {
-  if (!samplerSettingsStore["services"]) {
-    samplerSettingsStore["services"] = {};
+function getApiKeys() {
+  if (!samplerSettingsStore["api-keys"]) {
+    samplerSettingsStore["api-keys"] = {};
   }
-  return samplerSettingsStore["services"];
+  return samplerSettingsStore["api-keys"];
 }
 
-function populateServiceSelect() {
-  const services = getServicesObject();
-  const entries = Object.keys(services);
-
-  serviceSelect.innerHTML = '<option value="">-- Select a service --</option>';
-  entries.forEach(name => {
+// Shared form management
+function populateSelect(selectElement, items, placeholder) {
+  selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+  Object.keys(items).forEach(name => {
     const option = document.createElement("option");
     option.value = name;
     option.textContent = name;
-    serviceSelect.appendChild(option);
+    selectElement.appendChild(option);
   });
 }
 
-function showServiceForm(show = true) {
-  servicesForm.style.display = show ? "block" : "none";
+function showForm(formElement, show = true) {
+  formElement.style.display = show ? "block" : "none";
+}
+
+// Service management
+function applyServiceDefaults(serviceType) {
+  return SERVICE_DEFAULTS[serviceType] || SERVICE_DEFAULTS.base;
+}
+
+function populateServiceSelect() {
+  populateSelect(serviceSelect, getServices(), "-- Select a service --");
 }
 
 function populateServiceForm(serviceName = null, serviceData = null) {
   if (serviceName && serviceData) {
     // Editing existing service
     currentEditingService = serviceName;
-    document.getElementById("service-name").value = serviceName;
-    document.getElementById("sampling-method").value =
-      serviceData["sampling-method"] || "base";
-    document.getElementById("service-api-url").value =
-      serviceData["service-api-url"] || "";
-    document.getElementById("service-model-name").value =
-      serviceData["service-model-name"] || "";
-    document.getElementById("service-api-delay").value =
-      serviceData["service-api-delay"] || "";
-    document.getElementById("delete-service-btn").style.display =
-      "inline-block";
-    originalServiceData = { ...serviceData }; // Store original data
+    setValue("service-name", serviceName);
+    setValue("sampling-method", serviceData["sampling-method"] || "base");
+    setValue("service-api-url", serviceData["service-api-url"] || "");
+    setValue("service-model-name", serviceData["service-model-name"] || "");
+    setValue("service-api-delay", serviceData["service-api-delay"] || "");
+    setDisplay("delete-service-btn", true);
+    originalServiceData = { ...serviceData };
   } else {
     // Adding new service
     currentEditingService = null;
-    document.getElementById("service-name").value = "";
-    document.getElementById("sampling-method").value = "base";
-    document.getElementById("service-api-url").value = "";
-    document.getElementById("service-model-name").value = "";
-    document.getElementById("service-api-delay").value = "";
-    document.getElementById("delete-service-btn").style.display = "none";
-    originalServiceData = null; // Clear original data for new service
+    setValue("service-name", "");
+    setValue("sampling-method", "base");
+    setValue("service-api-url", "");
+    setValue("service-model-name", "");
+    setValue("service-api-delay", "");
+    setDisplay("delete-service-btn", false);
+    originalServiceData = null;
   }
 }
 
 function applyServiceDefaultsToForm(serviceType) {
   const defaults = applyServiceDefaults(serviceType);
-  document.getElementById("service-api-url").value =
-    defaults["service-api-url"];
-  document.getElementById("service-model-name").value =
-    defaults["service-model-name"];
-  document.getElementById("service-api-delay").value =
-    defaults["service-api-delay"];
+  setValue("service-api-url", defaults["service-api-url"]);
+  setValue("service-model-name", defaults["service-model-name"]);
+  setValue("service-api-delay", defaults["service-api-delay"]);
 }
 
 function saveService() {
-  const name = document.getElementById("service-name").value.trim();
-  const method = document.getElementById("sampling-method").value;
-  const url = document.getElementById("service-api-url").value.trim();
-  const model = document.getElementById("service-model-name").value.trim();
-  const delay = document.getElementById("service-api-delay").value.trim();
+  const name = getValue("service-name");
+  const method = getValue("sampling-method");
+  const url = getValue("service-api-url");
+  const model = getValue("service-model-name");
+  const delay = getValue("service-api-delay");
 
-  if (!validateFieldStringType(name, "modelNameType")) {
+  if (!utils.validateFieldStringType(name, "modelNameType")) {
     alert(
       "Invalid service name. Use letters, digits, '-', '_', or '.' (max 20 characters)."
     );
     return;
   }
 
-  if (!validateFieldStringType(url, "URLType")) {
+  if (!utils.validateFieldStringType(url, "URLType")) {
     alert("Invalid API URL.");
     return;
   }
 
-  const services = getServicesObject();
-
-  // Check for duplicate names (unless editing the same service)
+  const services = getServices();
   if (services[name] && name !== currentEditingService) {
     alert("A service with this name already exists.");
     return;
@@ -204,15 +197,14 @@ function saveService() {
 
   services[name] = serviceData;
 
-  // If we were editing and the name changed, delete the old one
   if (currentEditingService && currentEditingService !== name) {
     delete services[currentEditingService];
   }
 
   persistStore();
   populateServiceSelect();
-  serviceSelect.value = name; // Select the saved item
-  populateServiceForm(name, serviceData); // Repopulate form with saved data
+  serviceSelect.value = name;
+  populateServiceForm(name, serviceData);
   flashSaved(currentEditingService ? "Service updated." : "Service created.");
 }
 
@@ -224,7 +216,7 @@ function deleteService() {
       `Are you sure you want to delete the service "${currentEditingService}"?`
     )
   ) {
-    const services = getServicesObject();
+    const services = getServices();
     delete services[currentEditingService];
     persistStore();
     populateServiceSelect();
@@ -234,35 +226,15 @@ function deleteService() {
 }
 
 function cancelService() {
-  // Check if there are any changes by comparing current form values with original
   if (originalServiceData && currentEditingService) {
-    const currentName = document.getElementById("service-name").value.trim();
-    const currentMethod = document.getElementById("sampling-method").value;
-    const currentUrl = document.getElementById("service-api-url").value.trim();
-    const currentModel = document
-      .getElementById("service-model-name")
-      .value.trim();
-    const currentDelay = document
-      .getElementById("service-api-delay")
-      .value.trim();
-
-    const hasChanges =
-      currentName !== currentEditingService ||
-      currentMethod !== originalServiceData["sampling-method"] ||
-      currentUrl !== originalServiceData["service-api-url"] ||
-      currentModel !== originalServiceData["service-model-name"] ||
-      currentDelay !== originalServiceData["service-api-delay"];
-
+    const hasChanges = checkServiceChanges();
     if (hasChanges) {
-      // Revert to original values
       populateServiceForm(currentEditingService, originalServiceData);
       flashSaved("Changes reverted.");
     } else {
-      // No changes, just hide the form
       showServiceForm(false);
     }
   } else {
-    // New service or no original data, just hide the form
     showServiceForm(false);
   }
 
@@ -270,77 +242,74 @@ function cancelService() {
   originalServiceData = null;
 }
 
-function getSamplersObject() {
-  if (!samplerSettingsStore["samplers"]) {
-    samplerSettingsStore["samplers"] = {};
-  }
-  return samplerSettingsStore["samplers"];
+function checkServiceChanges() {
+  const currentName = getValue("service-name");
+  const currentMethod = getValue("sampling-method");
+  const currentUrl = getValue("service-api-url");
+  const currentModel = getValue("service-model-name");
+  const currentDelay = getValue("service-api-delay");
+
+  return (
+    currentName !== currentEditingService ||
+    currentMethod !== originalServiceData["sampling-method"] ||
+    currentUrl !== originalServiceData["service-api-url"] ||
+    currentModel !== originalServiceData["service-model-name"] ||
+    currentDelay !== originalServiceData["service-api-delay"]
+  );
+}
+
+function showServiceForm(show = true) {
+  showForm(servicesForm, show);
+}
+
+// Sampler management
+function getDefaultSampler() {
+  return { ...DEFAULT_SAMPLER };
 }
 
 function populateSamplerSelect() {
-  const samplers = getSamplersObject();
-  const entries = Object.keys(samplers);
-
-  samplerSelect.innerHTML = '<option value="">-- Select a sampler --</option>';
-  entries.forEach(name => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    samplerSelect.appendChild(option);
-  });
-}
-
-function showSamplerForm(show = true) {
-  samplersForm.style.display = show ? "block" : "none";
+  populateSelect(samplerSelect, getSamplers(), "-- Select a sampler --");
 }
 
 function populateSamplerForm(samplerName = null, samplerData = null) {
   if (samplerName && samplerData) {
     // Editing existing sampler
     currentEditingSampler = samplerName;
-    document.getElementById("sampler-name").value = samplerName;
-    document.getElementById("output-branches").value =
-      samplerData["output-branches"] || "";
-    document.getElementById("tokens-per-branch").value =
-      samplerData["tokens-per-branch"] || "";
-    document.getElementById("temperature").value =
-      samplerData["temperature"] || "";
-    document.getElementById("top-p").value = samplerData["top-p"] || "";
-    document.getElementById("top-k").value = samplerData["top-k"] || "";
-    document.getElementById("repetition-penalty").value =
-      samplerData["repetition-penalty"] || "";
-    document.getElementById("delete-sampler-btn").style.display =
-      "inline-block";
-    originalSamplerData = { ...samplerData }; // Store original data
+    setValue("sampler-name", samplerName);
+    setValue("output-branches", samplerData["output-branches"] || "");
+    setValue("tokens-per-branch", samplerData["tokens-per-branch"] || "");
+    setValue("temperature", samplerData["temperature"] || "");
+    setValue("top-p", samplerData["top-p"] || "");
+    setValue("top-k", samplerData["top-k"] || "");
+    setValue("repetition-penalty", samplerData["repetition-penalty"] || "");
+    setDisplay("delete-sampler-btn", true);
+    originalSamplerData = { ...samplerData };
   } else {
     // Adding new sampler
     currentEditingSampler = null;
     const defaults = getDefaultSampler();
-    document.getElementById("sampler-name").value = "";
-    document.getElementById("output-branches").value =
-      defaults["output-branches"];
-    document.getElementById("tokens-per-branch").value =
-      defaults["tokens-per-branch"];
-    document.getElementById("temperature").value = defaults["temperature"];
-    document.getElementById("top-p").value = defaults["top-p"];
-    document.getElementById("top-k").value = defaults["top-k"];
-    document.getElementById("repetition-penalty").value =
-      defaults["repetition-penalty"];
-    document.getElementById("delete-sampler-btn").style.display = "none";
-    originalSamplerData = null; // Clear original data for new sampler
+    setValue("sampler-name", "");
+    setValue("output-branches", defaults["output-branches"]);
+    setValue("tokens-per-branch", defaults["tokens-per-branch"]);
+    setValue("temperature", defaults["temperature"]);
+    setValue("top-p", defaults["top-p"]);
+    setValue("top-k", defaults["top-k"]);
+    setValue("repetition-penalty", defaults["repetition-penalty"]);
+    setDisplay("delete-sampler-btn", false);
+    originalSamplerData = null;
   }
 }
 
 function saveSampler() {
-  const name = document.getElementById("sampler-name").value.trim();
-  const branches = document.getElementById("output-branches").value.trim();
-  const tokens = document.getElementById("tokens-per-branch").value.trim();
-  const temp = document.getElementById("temperature").value.trim();
-  const topP = document.getElementById("top-p").value.trim();
-  const topK = document.getElementById("top-k").value.trim();
-  const penalty = document.getElementById("repetition-penalty").value.trim();
+  const name = getValue("sampler-name");
+  const branches = getValue("output-branches");
+  const tokens = getValue("tokens-per-branch");
+  const temp = getValue("temperature");
+  const topP = getValue("top-p");
+  const topK = getValue("top-k");
+  const penalty = getValue("repetition-penalty");
 
-  if (!validateFieldStringType(name, "modelNameType")) {
+  if (!utils.validateFieldStringType(name, "modelNameType")) {
     alert(
       "Invalid sampler name. Use letters, digits, '-', '_', or '.' (max 20 characters)."
     );
@@ -348,20 +317,18 @@ function saveSampler() {
   }
 
   if (
-    !validateFieldStringType(branches, "intType") ||
-    !validateFieldStringType(tokens, "intType") ||
-    !validateFieldStringType(temp, "floatType") ||
-    !validateFieldStringType(topP, "floatType") ||
-    !validateFieldStringType(topK, "intType") ||
-    !validateFieldStringType(penalty, "floatType")
+    !utils.validateFieldStringType(branches, "intType") ||
+    !utils.validateFieldStringType(tokens, "intType") ||
+    !utils.validateFieldStringType(temp, "floatType") ||
+    !utils.validateFieldStringType(topP, "floatType") ||
+    !utils.validateFieldStringType(topK, "intType") ||
+    !utils.validateFieldStringType(penalty, "floatType")
   ) {
     alert("Please check your input values. Some fields have invalid formats.");
     return;
   }
 
-  const samplers = getSamplersObject();
-
-  // Check for duplicate names (unless editing the same sampler)
+  const samplers = getSamplers();
   if (samplers[name] && name !== currentEditingSampler) {
     alert("A sampler with this name already exists.");
     return;
@@ -378,25 +345,23 @@ function saveSampler() {
 
   samplers[name] = samplerData;
 
-  // If we were editing and the name changed, delete the old one
   if (currentEditingSampler && currentEditingSampler !== name) {
     delete samplers[currentEditingSampler];
   }
 
   persistStore();
   populateSamplerSelect();
-  samplerSelect.value = name; // Select the saved item
-  populateSamplerForm(name, samplerData); // Repopulate form with saved data
+  samplerSelect.value = name;
+  populateSamplerForm(name, samplerData);
   flashSaved(currentEditingSampler ? "Sampler updated." : "Sampler created.");
 }
 
 function deleteSampler() {
   if (!currentEditingSampler) return;
 
-  const samplers = getSamplersObject();
+  const samplers = getSamplers();
   const samplerCount = Object.keys(samplers).length;
 
-  // Prevent deleting the last sampler
   if (samplerCount <= 1) {
     flashSaved(
       "Cannot delete the last sampler. At least one sampler is required.",
@@ -419,41 +384,15 @@ function deleteSampler() {
 }
 
 function cancelSampler() {
-  // Check if there are any changes by comparing current form values with original
   if (originalSamplerData && currentEditingSampler) {
-    const currentName = document.getElementById("sampler-name").value.trim();
-    const currentBranches = document
-      .getElementById("output-branches")
-      .value.trim();
-    const currentTokens = document
-      .getElementById("tokens-per-branch")
-      .value.trim();
-    const currentTemp = document.getElementById("temperature").value.trim();
-    const currentTopP = document.getElementById("top-p").value.trim();
-    const currentTopK = document.getElementById("top-k").value.trim();
-    const currentPenalty = document
-      .getElementById("repetition-penalty")
-      .value.trim();
-
-    const hasChanges =
-      currentName !== currentEditingSampler ||
-      currentBranches !== originalSamplerData["output-branches"] ||
-      currentTokens !== originalSamplerData["tokens-per-branch"] ||
-      currentTemp !== originalSamplerData["temperature"] ||
-      currentTopP !== originalSamplerData["top-p"] ||
-      currentTopK !== originalSamplerData["top-k"] ||
-      currentPenalty !== originalSamplerData["repetition-penalty"];
-
+    const hasChanges = checkSamplerChanges();
     if (hasChanges) {
-      // Revert to original values
       populateSamplerForm(currentEditingSampler, originalSamplerData);
       flashSaved("Changes reverted.");
     } else {
-      // No changes, just hide the form
       showSamplerForm(false);
     }
   } else {
-    // New sampler or no original data, just hide the form
     showSamplerForm(false);
   }
 
@@ -461,18 +400,36 @@ function cancelSampler() {
   originalSamplerData = null;
 }
 
-function getApiKeysObject() {
-  if (!samplerSettingsStore["api-keys"]) {
-    samplerSettingsStore["api-keys"] = {};
-  }
-  return samplerSettingsStore["api-keys"];
+function checkSamplerChanges() {
+  const currentName = getValue("sampler-name");
+  const currentBranches = getValue("output-branches");
+  const currentTokens = getValue("tokens-per-branch");
+  const currentTemp = getValue("temperature");
+  const currentTopP = getValue("top-p");
+  const currentTopK = getValue("top-k");
+  const currentPenalty = getValue("repetition-penalty");
+
+  return (
+    currentName !== currentEditingSampler ||
+    currentBranches !== originalSamplerData["output-branches"] ||
+    currentTokens !== originalSamplerData["tokens-per-branch"] ||
+    currentTemp !== originalSamplerData["temperature"] ||
+    currentTopP !== originalSamplerData["top-p"] ||
+    currentTopK !== originalSamplerData["top-k"] ||
+    currentPenalty !== originalSamplerData["repetition-penalty"]
+  );
 }
 
+function showSamplerForm(show = true) {
+  showForm(samplersForm, show);
+}
+
+// API Keys management
 function renderApiKeysList() {
   const tbody = document.getElementById("keys-tbody");
   tbody.innerHTML = "";
-  const obj = getApiKeysObject();
-  const entries = Object.entries(obj);
+  const apiKeys = getApiKeys();
+  const entries = Object.entries(apiKeys);
 
   if (entries.length === 0) {
     const tr = document.createElement("tr");
@@ -485,8 +442,9 @@ function renderApiKeysList() {
     return;
   }
 
-  for (const [name, secret] of entries) {
+  entries.forEach(([name, secret]) => {
     const tr = document.createElement("tr");
+
     const tdName = document.createElement("td");
     tdName.textContent = name;
 
@@ -515,8 +473,8 @@ function renderApiKeysList() {
     delBtn.textContent = "Delete";
     delBtn.addEventListener("click", async () => {
       if (confirm(`Are you sure you want to delete the API key "${name}"?`)) {
-        const obj = getApiKeysObject();
-        delete obj[name];
+        const apiKeys = getApiKeys();
+        delete apiKeys[name];
         await persistStore();
         renderApiKeysList();
         flashSaved("API key deleted.");
@@ -530,9 +488,10 @@ function renderApiKeysList() {
     tr.appendChild(tdSecret);
     tr.appendChild(tdActions);
     tbody.appendChild(tr);
-  }
+  });
 }
 
+// Tab management
 function showTab(tabElement) {
   servicesTab.classList.remove("visible-tab");
   samplersTab.classList.remove("visible-tab");
@@ -543,12 +502,18 @@ function showTab(tabElement) {
 function setActiveTab(tabName) {
   activeTab = tabName;
 
-  // Update tab button states
-  for (const b of document.querySelectorAll("#settings-tabs .tab-btn")) {
-    b.classList.toggle("active", b.dataset.tab === activeTab);
+  for (const btn of document.querySelectorAll("#settings-tabs .tab-btn")) {
+    btn.classList.remove("active");
   }
 
-  // Show the appropriate tab and render its content
+  // Add active class to the correct button
+  const activeButton = document.querySelector(
+    `#settings-tabs .tab-btn[data-tab="${activeTab}"]`
+  );
+  if (activeButton) {
+    activeButton.classList.add("active");
+  }
+
   if (activeTab === "services") {
     showTab(servicesTab);
     populateServiceSelect();
@@ -561,105 +526,119 @@ function setActiveTab(tabName) {
   }
 }
 
-// Event listeners
-document.addEventListener("DOMContentLoaded", function () {
-  const addServiceBtn = document.getElementById("add-service-btn");
-  if (addServiceBtn) {
-    addServiceBtn.addEventListener("click", () => {
-      serviceSelect.value = ""; // Clear selection
+// Data persistence
+async function loadSettings() {
+  try {
+    const data = await window.electronAPI.loadSettings();
+    if (data != null) {
+      samplerSettingsStore = data;
+    }
+  } catch (err) {
+    console.error("Load Settings Error:", err);
+  }
+}
+
+async function persistStore() {
+  try {
+    await window.electronAPI.saveSettings(samplerSettingsStore);
+  } catch (err) {
+    console.error("Settings save Error:", err);
+  }
+}
+
+// New user detection
+function checkForNewUserInSettings() {
+  const hasServices =
+    samplerSettingsStore?.services &&
+    Object.keys(samplerSettingsStore.services).length > 0;
+
+  if (!hasServices) {
+    const welcomeMessage = document.getElementById("welcome-message");
+    if (welcomeMessage) {
+      welcomeMessage.style.display = "block";
+    }
+
+    setTimeout(() => {
       showServiceForm(true);
       populateServiceForm();
-    });
+    }, 100);
   }
+}
 
-  const saveServiceBtn = document.getElementById("save-service-btn");
-  if (saveServiceBtn) {
-    saveServiceBtn.addEventListener("click", saveService);
-  }
+// Event listeners
+document.addEventListener("DOMContentLoaded", function () {
+  // Service event listeners
+  document.getElementById("add-service-btn")?.addEventListener("click", () => {
+    serviceSelect.value = "";
+    showServiceForm(true);
+    populateServiceForm();
+  });
 
-  const cancelServiceBtn = document.getElementById("cancel-service-btn");
-  if (cancelServiceBtn) {
-    cancelServiceBtn.addEventListener("click", cancelService);
-  }
+  document
+    .getElementById("save-service-btn")
+    ?.addEventListener("click", saveService);
+  document
+    .getElementById("cancel-service-btn")
+    ?.addEventListener("click", cancelService);
+  document
+    .getElementById("delete-service-btn")
+    ?.addEventListener("click", deleteService);
 
-  const deleteServiceBtn = document.getElementById("delete-service-btn");
-  if (deleteServiceBtn) {
-    deleteServiceBtn.addEventListener("click", deleteService);
-  }
+  serviceSelect?.addEventListener("change", () => {
+    const selected = serviceSelect.value;
+    if (selected) {
+      const services = getServices();
+      const serviceData = services[selected];
+      populateServiceForm(selected, serviceData);
+      showServiceForm(true);
+    } else {
+      showServiceForm(false);
+    }
+  });
 
-  // Service select change
-  if (serviceSelect) {
-    serviceSelect.addEventListener("change", () => {
-      const selected = serviceSelect.value;
-      if (selected) {
-        const services = getServicesObject();
-        const serviceData = services[selected];
-        populateServiceForm(selected, serviceData);
-        showServiceForm(true);
-      } else {
-        showServiceForm(false);
-      }
-    });
-  }
+  document.getElementById("sampling-method")?.addEventListener("change", () => {
+    applyServiceDefaultsToForm(
+      document.getElementById("sampling-method").value
+    );
+  });
 
-  // Sampling method change
-  const samplingMethod = document.getElementById("sampling-method");
-  if (samplingMethod) {
-    samplingMethod.addEventListener("change", () => {
-      applyServiceDefaultsToForm(samplingMethod.value);
-    });
-  }
+  // Sampler event listeners
+  document.getElementById("add-sampler-btn")?.addEventListener("click", () => {
+    samplerSelect.value = "";
+    showSamplerForm(true);
+    populateSamplerForm();
+  });
 
-  // Samplers
-  const addSamplerBtn = document.getElementById("add-sampler-btn");
-  if (addSamplerBtn) {
-    addSamplerBtn.addEventListener("click", () => {
-      samplerSelect.value = ""; // Clear selection
+  document
+    .getElementById("save-sampler-btn")
+    ?.addEventListener("click", saveSampler);
+  document
+    .getElementById("cancel-sampler-btn")
+    ?.addEventListener("click", cancelSampler);
+  document
+    .getElementById("delete-sampler-btn")
+    ?.addEventListener("click", deleteSampler);
+
+  samplerSelect?.addEventListener("change", () => {
+    const selected = samplerSelect.value;
+    if (selected) {
+      const samplers = getSamplers();
+      const samplerData = samplers[selected];
+      populateSamplerForm(selected, samplerData);
       showSamplerForm(true);
-      populateSamplerForm();
-    });
-  }
+    } else {
+      showSamplerForm(false);
+    }
+  });
 
-  const saveSamplerBtn = document.getElementById("save-sampler-btn");
-  if (saveSamplerBtn) {
-    saveSamplerBtn.addEventListener("click", saveSampler);
-  }
+  // API Keys event listeners
+  document
+    .getElementById("add-key-btn")
+    ?.addEventListener("click", async () => {
+      const name = getValue("key-name");
+      const value = getValue("key-value");
 
-  const cancelSamplerBtn = document.getElementById("cancel-sampler-btn");
-  if (cancelSamplerBtn) {
-    cancelSamplerBtn.addEventListener("click", cancelSampler);
-  }
-
-  const deleteSamplerBtn = document.getElementById("delete-sampler-btn");
-  if (deleteSamplerBtn) {
-    deleteSamplerBtn.addEventListener("click", deleteSampler);
-  }
-
-  // Sampler select change
-  if (samplerSelect) {
-    samplerSelect.addEventListener("change", () => {
-      const selected = samplerSelect.value;
-      if (selected) {
-        const samplers = getSamplersObject();
-        const samplerData = samplers[selected];
-        populateSamplerForm(selected, samplerData);
-        showSamplerForm(true);
-      } else {
-        showSamplerForm(false);
-      }
-    });
-  }
-
-  // API Keys
-  const addKeyBtn = document.getElementById("add-key-btn");
-  if (addKeyBtn) {
-    addKeyBtn.addEventListener("click", async () => {
-      const nameEl = document.getElementById("key-name");
-      const valEl = document.getElementById("key-value");
-      const name = nameEl.value.trim();
-      const value = valEl.value;
-
-      if (!validateFieldStringType(name, "modelNameType")) {
+      if (!utils.validateFieldStringType(name, "modelNameType")) {
         alert(
           "Invalid key name. Use letters, digits, '-', '_', or '.' (max 20 characters)."
         );
@@ -670,65 +649,40 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      const obj = getApiKeysObject();
-      if (obj[name]) {
+      const apiKeys = getApiKeys();
+      if (apiKeys[name]) {
         alert("An API key with this name already exists.");
         return;
       }
 
-      obj[name] = value;
+      apiKeys[name] = value;
       await persistStore();
-      nameEl.value = "";
-      valEl.value = "";
+      setValue("key-name", "");
+      setValue("key-value", "");
       renderApiKeysList();
       flashSaved("API key added.");
     });
-  }
 
   // Tab switching
-  const tabs = document.getElementById("settings-tabs");
-  if (tabs) {
-    tabs.addEventListener("click", e => {
-      const btn = e.target.closest(".tab-btn");
-      if (!btn) return;
-      setActiveTab(btn.dataset.tab);
-    });
-  }
+  document.getElementById("settings-tabs")?.addEventListener("click", e => {
+    const btn = e.target.closest(".tab-btn");
+    if (!btn) return;
+    setActiveTab(btn.dataset.tab);
+  });
+
+  // Close button
+  document.getElementById("close-settings")?.addEventListener("click", () => {
+    window.electronAPI.closeSettingsWindow();
+  });
 
   // Initialize
   loadSettings().then(() => {
-    setActiveTab("services"); // Set initial active tab with loaded data
+    // Only set default tab if no tab was already set via event
+    if (!activeTab) {
+      setActiveTab("services");
+    }
 
     // Check if this is a new user (no services configured)
     checkForNewUserInSettings();
   });
-
-  // Close button handler
-  const closeBtn = document.getElementById("close-settings");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
-      window.electronAPI.closeSettingsWindow();
-    });
-  }
 });
-
-// Check if user is new and show welcome message
-function checkForNewUserInSettings() {
-  const hasServices =
-    samplerSettingsStore &&
-    samplerSettingsStore.services &&
-    Object.keys(samplerSettingsStore.services).length > 0;
-
-  if (!hasServices) {
-    const welcomeMessage = document.getElementById("welcome-message");
-    if (welcomeMessage) {
-      welcomeMessage.style.display = "block";
-    }
-
-    // Automatically open the "Add New" form for services
-    setTimeout(() => {
-      showServiceForm(true);
-      populateServiceForm();
-    }, 100);
-  }
-}

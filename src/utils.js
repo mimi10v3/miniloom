@@ -141,3 +141,17 @@ if (typeof module !== "undefined" && module.exports) {
     truncateText,
   };
 }
+
+// Create a single utils namespace to avoid global pollution
+if (typeof window !== "undefined") {
+  window.utils = {
+    validateFieldStringType,
+    isValidUrl,
+    countCharacters,
+    countWords,
+    highlightText,
+    escapeRegex,
+    formatTimestamp,
+    truncateText,
+  };
+}

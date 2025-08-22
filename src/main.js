@@ -218,17 +218,14 @@ ipcMain.handle("load-settings", async event => {
     "miniloom",
     "settings.json"
   );
-  console.log("Loading settings from:", miniLoomSettingsFilePath);
 
   let settings;
   if (fs.existsSync(miniLoomSettingsFilePath)) {
     settings = fs.readFileSync(miniLoomSettingsFilePath, "utf8");
     const parsedSettings = JSON.parse(settings);
-    console.log("Settings loaded successfully:", parsedSettings);
     return parsedSettings;
   } else {
     // Return empty settings object if file doesn't exist
-    console.log("Settings file doesn't exist, returning empty settings");
     return {
       services: {},
       samplers: {},

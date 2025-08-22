@@ -6,16 +6,25 @@ const dmp = {
 const editor = document.getElementById("editor");
 const promptTokenCounter = document.getElementById("prompt-token-counter");
 const errorMessage = document.getElementById("error-message");
+const focusedNodeTitle = document.getElementById("focused-node-title");
+const batchIndexMarker = document.getElementById("batch-item-index");
+const generateButton = document.getElementById("generate-button");
+const thumbUp = document.getElementById("thumb-up");
+const thumbDown = document.getElementById("thumb-down");
 
+/**
+ * Node class - represents an immutable node in the tree
+ * Nodes are created from files, human input, or LLM generation
+ * Once created, they are immutable except for rating changes
+ */
 class Node {
   constructor(id, type, parent, patch, summary) {
     this.id = id;
     this.timestamp = Date.now();
-    this.type = type;
+    this.type = type; // "root", "user", "gen", "rewrite"
     this.patch = patch;
     this.summary = summary;
-    this.cache = false;
-    this.rating = null;
+    this.rating = null; // true = thumbs up, false = thumbs down, null = no rating
     this.read = false;
     this.parent = parent;
     this.children = [];
@@ -33,13 +42,15 @@ class LoomTree {
     const patch = dmp.patch_make(parentRenderedText, text);
     const newNodeId = String(Object.keys(this.nodeStore).length + 1);
     const newNode = new Node(newNodeId, type, parent.id, patch, summary);
-    if (newNode.type == "user") {
+
+    if (newNode.type === "user") {
       newNode.read = true;
     }
+
     parent.children.push(newNodeId);
     this.nodeStore[newNodeId] = newNode;
 
-    if (window.searchManager && window.searchManager.addNode) {
+    if (window.searchManager) {
       window.searchManager.addNode(newNode);
     }
 
@@ -47,1115 +58,317 @@ class LoomTree {
   }
 
   updateNode(node, text, summary) {
-    if (node.type == "gen") {
-      return;
-    } else if (node.children.length > 0) {
-      return;
+    if (node.type === "gen" || node.children.length > 0) {
+      return; // Can't update generated nodes or nodes with children
     }
 
-    // Update a user written leaf
     const parent = this.nodeStore[node.parent];
     const parentRenderedText = this.renderNode(parent);
     const patch = dmp.patch_make(parentRenderedText, text);
+
     node.timestamp = Date.now();
     node.patch = patch;
     node.summary = summary;
 
-    if (window.searchManager && window.searchManager.updateNode) {
+    if (window.searchManager) {
       window.searchManager.updateNode(node);
     }
   }
 
+  /**
+   * Render the full text of a node by applying all patches from root
+   */
   renderNode(node) {
-    if (node == this.root) {
+    if (!node || node === this.root) {
       return "";
     }
-    if (node.cache) {
-      return node.cache;
-    }
+
     const patches = [];
     patches.push(node.patch);
-    const cacheNode = node;
-    while (node.parent !== null) {
-      node = this.nodeStore[node.parent];
-      patches.push(node.patch);
-    }
-    patches.reverse();
-    var outText = "";
-    for (let patch of patches) {
-      if (patch == "") {
-        continue;
+
+    let currentNode = node;
+    while (currentNode.parent !== null) {
+      currentNode = this.nodeStore[currentNode.parent];
+      if (!currentNode) {
+        console.warn("Parent node not found in nodeStore:", node.parent);
+        break;
       }
-      var [outText, results] = dmp.patch_apply(patch, outText);
+      patches.push(currentNode.patch);
+    }
+
+    patches.reverse();
+    let outText = "";
+    for (let patch of patches) {
+      if (patch === "") continue;
+      const [newText, results] = dmp.patch_apply(patch, outText);
+      outText = newText;
     }
     return outText;
   }
 
+  /**
+   * Update a node's rating (thumbs up/down)
+   */
+  updateNodeRating(nodeId, rating) {
+    const node = this.nodeStore[nodeId];
+    if (node) {
+      node.rating = rating;
+      if (window.searchManager) {
+        window.searchManager.updateNode(node);
+      }
+    }
+  }
+
+  // Serialization methods
   serialize(node = this.root) {
     return JSON.stringify(this._serializeHelper(node), null, 2);
   }
 
   _serializeHelper(node) {
-    const serializedChildren = node.children.map(child =>
-      this._serializeHelper(this.nodeStore[child])
-    );
+    if (!node) {
+      console.error("Attempting to serialize undefined node");
+      return null;
+    }
+
+    const serializedChildren = node.children
+      .map(child => {
+        const childNode = this.nodeStore[child];
+        if (!childNode) {
+          console.error("Child node not found in nodeStore:", child);
+          return null;
+        }
+        return this._serializeHelper(childNode);
+      })
+      .filter(child => child !== null);
+
     return {
+      id: node.id,
       timestamp: node.timestamp,
       type: node.type,
       patch: node.patch,
+      summary: node.summary,
       rating: node.rating,
+      read: node.read,
+      parent: node.parent,
       children: serializedChildren,
     };
   }
+
+  loadFromData(loomTreeData) {
+    this.nodeStore = {};
+
+    Object.keys(loomTreeData.nodeStore).forEach(nodeId => {
+      const nodeData = loomTreeData.nodeStore[nodeId];
+      const node = new Node(
+        nodeData.id,
+        nodeData.type,
+        nodeData.parent,
+        nodeData.patch,
+        nodeData.summary
+      );
+
+      node.timestamp = nodeData.timestamp;
+      node.rating = nodeData.rating;
+      node.read = nodeData.read;
+      node.children = nodeData.children || [];
+
+      this.nodeStore[nodeId] = node;
+    });
+
+    this.root = this.nodeStore["1"];
+  }
 }
 
-const MAX_PARENTS = 2;
-const MAX_CHILDREN = 5;
+// Global state management
+class AppState {
+  constructor() {
+    this.loomTree = new LoomTree();
+    this.focusedNode = this.loomTree.root;
+    this.samplerSettingsStore = {};
+    this.updatingNode = false;
+    this.secondsSinceLastSave = 0;
+  }
 
-function renderTree(node, container) {
-  let parentIds = [];
-  for (let i = 0; i < MAX_PARENTS; i++) {
-    if (node.parent === null) {
-      break; // Stop at root node
+  // Core methods that modules actually use
+  setFocusedNode(nodeId) {
+    const node = this.loomTree.nodeStore[nodeId];
+    if (!node) {
+      console.warn("Node not found for focus change:", nodeId);
+      return;
     }
-    parentIds.push(node.parent);
-    node = loomTree.nodeStore[node.parent];
+    this.focusedNode = node;
+    renderFocusedNode();
   }
 
-  const ul = document.createElement("ul");
-  const li = createTreeLi(node, 1, false, parentIds);
-  if (node.parent) {
-    li.classList.add("hidden-parents");
+  getFocusedNode() {
+    return this.focusedNode;
   }
-  ul.appendChild(li);
-  renderChildren(node, li, MAX_CHILDREN, parentIds);
-  container.appendChild(ul);
+
+  getLoomTree() {
+    return this.loomTree;
+  }
+
+  getSamplerSettingsStore() {
+    return this.samplerSettingsStore;
+  }
+
+  updateSamplerSettingsStore(newSettings) {
+    this.samplerSettingsStore = newSettings;
+    window.samplerSettingsStore = this.samplerSettingsStore;
+  }
 }
 
-function renderChildren(node, container, maxChildrenDepth, parentIds) {
-  if (maxChildrenDepth <= 0) return; // Stop recursion when maxChildrenDepth reaches 0 or there are no children
-  if (node.children.length == 0) return;
+// Global state instance
+const appState = new AppState();
 
-  const childrenUl = document.createElement("ul");
-  for (let i = 0; i < node.children.length; i++) {
-    const child = loomTree.nodeStore[node.children[i]];
-    const li = createTreeLi(child, i + 1, maxChildrenDepth <= 1, parentIds);
-    childrenUl.appendChild(li);
-    renderChildren(child, li, maxChildrenDepth - 1, parentIds);
+// Service instances
+let llmService;
+let treeNav;
+
+/**
+ * Node Focus Management
+ * The focused node is the one currently being viewed/edited
+ */
+function setFocusedNode(nodeId) {
+  const node = appState.loomTree.nodeStore[nodeId];
+  if (!node) {
+    console.warn("Node not found for focus change:", nodeId);
+    return;
   }
-  container.appendChild(childrenUl);
+
+  appState.focusedNode = node;
+  renderFocusedNode();
 }
 
-function createTreeLi(node, index, isMaxDepth, parentIds) {
-  // todo: consider using up/down votes to adjust max depth of children displayed
-  // todo: consider adding a die icon for generation in progress / an error icon if it fails
-
-  const li = document.createElement("li");
-  const nodeSpan = document.createElement("span");
-
-  if (node.id == focus.id) {
-    nodeSpan.id = "focused-node";
-  }
-  nodeSpan.classList.add(node.read ? "read-tree-node" : "unread-tree-node");
-  nodeSpan.classList.add("type-" + node.type);
-
-  if (parentIds && parentIds.includes(node.id)) {
-    nodeSpan.classList.add("parent-of-focused");
-  }
-  if (node.rating === true || node.rating === false) {
-    nodeSpan.classList.add(node.rating ? "upvoted" : "downvoted");
-  }
-  if (isMaxDepth && node.children && node.children.length > 0) {
-    nodeSpan.classList.add("hidden-children");
-  }
-
-  const link = document.createElement("a");
-  link.textContent = (node.summary || "").trim() || "Option " + index;
-  link.title = index + ". " + link.textContent;
-
-  link.onclick = event => {
-    event.stopPropagation(); // Stop event bubbling
-    changeFocus(node.id);
-  };
-
-  const thumbSpan = document.createElement("span");
-  thumbSpan.classList.add("tree-thumb");
-  if (node.rating === true) {
-    thumbSpan.classList.add("thumb-up");
-    thumbSpan.textContent = " 👍";
-  } else if (node.rating === false) {
-    thumbSpan.classList.add("thumb-down");
-    thumbSpan.textContent = " 👎";
-  }
-
-  link.appendChild(thumbSpan);
-  nodeSpan.append(link);
-  li.append(nodeSpan);
-  return li;
+function getFocusedNode() {
+  return appState.focusedNode;
 }
 
-var loomTree = new LoomTree();
-const loomTreeView = document.getElementById("loom-tree-view");
-let focus = loomTree.nodeStore["1"];
-renderTree(loomTree.root, loomTreeView);
-
-// Initialize focused node title
-const focusedNodeTitle = document.getElementById("focused-node-title");
-if (focusedNodeTitle) {
-  const title = (focus.summary || "").trim() || "Untitled Node";
-  focusedNodeTitle.textContent = title;
-}
-
-function renderTick() {
-  editor.value = "";
-  var next = focus;
-  editor.value = loomTree.renderNode(next);
-
-  let parent;
-  let selection;
-  let batchLimit;
-  if (focus.parent) {
-    parent = loomTree.nodeStore[focus.parent];
-    selection = parent.children.indexOf(focus.id);
-    batchLimit = parent.children.length - 1;
-  } else {
-    selection = 0;
-    batchLimit = 0;
+/**
+ * Render the focused node to the UI
+ * This is the main rendering function that updates all UI elements
+ */
+function renderFocusedNode() {
+  if (!appState.focusedNode) {
+    console.warn("No focused node to render");
+    return;
   }
 
-  const batchIndexMarker = document.getElementById("batch-item-index");
-  batchIndexMarker.textContent = `${selection + 1}/${batchLimit + 1}`;
-
-  // Update focused node title
-  const focusedNodeTitle = document.getElementById("focused-node-title");
-  if (focusedNodeTitle) {
-    const title = (focus.summary || "").trim() || "Untitled Node";
-    focusedNodeTitle.textContent = title;
-  }
-
-  const generateButton = document.getElementById("generate-button");
-  if (generateButton) {
-    generateButton.onclick = () => reroll(focus.id, false);
-  }
-
-  focus.read = true;
-  loomTreeView.innerHTML = "";
-  renderTree(focus, loomTreeView);
+  editor.value = appState.loomTree.renderNode(appState.focusedNode);
+  treeNav.updateTreeView();
+  updateBatchIndex();
+  updateFocusedNodeTitle();
+  updateThumbState();
+  updateCounterDisplay(editor.value);
   errorMessage.textContent = "";
   document.getElementById("errors").classList.remove("has-error");
-  updateCounterDisplay(editor.value);
-  updateThumbState();
+  appState.focusedNode.read = true;
 }
 
-function changeFocus(newFocusId) {
-  focus = loomTree.nodeStore[newFocusId];
-  // Prevent focus change from interrupting users typing
-  if (focus.type === "user" && focus.children.length == 0) {
-    loomTreeView.innerHTML = "";
-    renderTree(focus, loomTreeView);
-    updateThumbState();
-    // Update focused node title even when not calling renderTick
-    const focusedNodeTitle = document.getElementById("focused-node-title");
-    if (focusedNodeTitle) {
-      const title = (focus.summary || "").trim() || "Untitled Node";
-      focusedNodeTitle.textContent = title;
-    }
+function updateBatchIndex() {
+  if (appState.focusedNode.parent) {
+    const parent = appState.loomTree.nodeStore[appState.focusedNode.parent];
+    const selection = parent.children.indexOf(appState.focusedNode.id);
+    const batchLimit = parent.children.length - 1;
+    batchIndexMarker.textContent = `${selection + 1}/${batchLimit + 1}`;
   } else {
-    renderTick();
-    editor.selectionStart = editor.value.length;
-    editor.selectionEnd = editor.value.length;
-    editor.focus();
+    batchIndexMarker.textContent = "1/1";
   }
 }
 
-function prepareRollParams() {
-  const serviceSelector = document.getElementById("service-selector");
-  const samplerSelector = document.getElementById("sampler-selector");
-  const apiKeySelector = document.getElementById("api-key-selector");
-
-  // Get selected service, sampler, and API key
-  const selectedServiceName = serviceSelector ? serviceSelector.value : "";
-  const selectedSamplerName = samplerSelector ? samplerSelector.value : "";
-  const selectedApiKeyName = apiKeySelector ? apiKeySelector.value : "";
-
-  // Get service data
-  let serviceData = {};
-  if (
-    selectedServiceName &&
-    samplerSettingsStore &&
-    samplerSettingsStore.services
-  ) {
-    serviceData = samplerSettingsStore.services[selectedServiceName] || {};
-  }
-
-  // Get sampler data
-  let samplerData = {};
-  if (
-    selectedSamplerName &&
-    samplerSettingsStore &&
-    samplerSettingsStore.samplers
-  ) {
-    samplerData = samplerSettingsStore.samplers[selectedSamplerName] || {};
-  }
-
-  // Get API key
-  let apiKey = "";
-  if (
-    selectedApiKeyName &&
-    samplerSettingsStore &&
-    samplerSettingsStore["api-keys"]
-  ) {
-    apiKey = samplerSettingsStore["api-keys"][selectedApiKeyName] || "";
-  }
-
-  const params = {
-    // Service parameters
-    "sampling-method": serviceData["sampling-method"] || "base",
-    "api-url": serviceData["service-api-url"] || "",
-    "model-name": serviceData["service-model-name"] || "",
-    "api-delay": parseInt(serviceData["service-api-delay"]) || 3000,
-    "api-key": apiKey,
-
-    // Sampler parameters
-    "output-branches": parseInt(samplerData["output-branches"]) || 2,
-    "tokens-per-branch": parseInt(samplerData["tokens-per-branch"]) || 256,
-    temperature: parseFloat(samplerData["temperature"]) || 0.9,
-    "top-p": parseFloat(samplerData["top-p"]) || 1,
-    "top-k": parseInt(samplerData["top-k"]) || 100,
-    "repetition-penalty": parseFloat(samplerData["repetition-penalty"]) || 1,
-  };
-
-  // Debug logging
-  console.log("prepareRollParams:", {
-    selectedServiceName,
-    selectedSamplerName,
-    selectedApiKeyName,
-    apiKey: apiKey ? "***" : "EMPTY",
-    apiUrl: params["api-url"],
-    modelName: params["model-name"],
-    serviceData,
-    samplerData,
-    samplerSettingsStore: samplerSettingsStore ? "exists" : "null",
-  });
-
-  return params;
-}
-
-async function getResponses(
-  endpoint,
-  {
-    prompt,
-    weave = true,
-    weaveParams = {},
-    focusId = null,
-    includePrompt = false,
-  }
-) {
-  let wp = weaveParams;
-  if (focusId) {
-    loomTree.renderNode(loomTree.nodeStore[focusId]);
-  }
-  if (weave) {
-    endpoint = endpoint + "weave";
-  } else {
-    endpoint = endpoint + "generate";
-  }
-
-  r = await fetch(endpoint, {
-    method: "POST",
-    body: JSON.stringify({
-      prompt: prompt,
-      prompt_node: includePrompt,
-      tokens_per_branch: wp["tokens_per_branch"],
-      output_branches: wp["output_branches"],
-    }),
-    headers: {
-      "Content-type": "application/json; charset=UTF-8",
-    },
-  });
-  batch = await r.json();
-  return batch;
-}
-
-async function getSummary(taskText) {
-  const params = prepareRollParams();
-  const endpoint = params["api-url"];
-
-  // Use safe API to read prompt file
-  const summarizePromptTemplate =
-    await window.electronAPI.readPromptFile("summarize.txt");
-  const summarizePrompt = summarizePromptTemplate.replace(
-    "{MODEL_NAME}",
-    params["model-name"]
-  );
-  // Limit context to 8 * 512, where eight is the average number of letters in a word
-  // and 512 is the number of words to summarize over
-  // otherwise we eventually end up pushing the few shot prompt out of the context window
-  const prompt =
-    summarizePrompt +
-    "\n\n" +
-    "<tasktext>\n" +
-    taskText.slice(-4096) +
-    "\n</tasktext>\n\nThree Words:";
-  // TODO: Flip this case around
-  if (
-    !["together", "openrouter", "openai", "openai-chat"].includes(
-      params["sampling-method"]
-    )
-  ) {
-    r = await fetch(endpoint + "generate", {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: prompt,
-        prompt_node: true,
-        evaluationPrompt: "",
-        tokens_per_branch: 10,
-        output_branches: 1,
-      }),
-      headers: {
-        "Content-type": "application/json; charset=UTF-8",
-      },
-    });
-    let batch = await r.json();
-    // Always get last three words
-    return batch[1]["text"]
-      .trim()
-      .split("\n")[0]
-      .split(" ")
-      .slice(0, 3)
-      .join(" ");
-  } // TODO: Figure out how I might have to change this if I end up supporting
-  // multiple APIs
-  else if (params["sampling-method"] == "openai-chat") {
-    // Check if this is Anthropic API
-    const isAnthropic = endpoint.includes("api.anthropic.com");
-
-    let requestUrl = endpoint;
-    let headers = {
-      "Content-type": "application/json; charset=UTF-8",
-    };
-    let requestBody;
-
-    if (isAnthropic) {
-      // Anthropic API format
-      requestUrl = "https://api.anthropic.com/v1/messages";
-      headers["x-api-key"] = params["api-key"];
-      headers["anthropic-version"] = "2023-06-01";
-
-      requestBody = {
-        model: params["model-name"],
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 10,
-        temperature: params["temperature"],
-        top_p: params["top-p"],
-      };
-    } else {
-      // OpenAI format
-      headers.Authorization = `Bearer ${params["api-key"]}`;
-
-      requestBody = {
-        messages: [{ role: "system", content: prompt }],
-        model: params["model-name"],
-        max_tokens: 10,
-        temperature: params["temperature"],
-        top_p: params["top-p"],
-        top_k: params["top-k"],
-        repetition_penalty: params["repetition-penalty"],
-      };
-    }
-
-    r = await fetch(requestUrl, {
-      method: "POST",
-      body: JSON.stringify(requestBody),
-      headers: headers,
-    });
-
-    if (!r.ok) {
-      let errorMessage = r.statusText;
-      try {
-        const errorData = await r.json();
-        errorMessage = errorData.error?.message || errorMessage;
-      } catch (jsonError) {
-        try {
-          const errorText = await r.text();
-          errorMessage = errorText || errorMessage;
-        } catch (textError) {
-          errorMessage = r.statusText;
-        }
-      }
-      throw new Error(`API Error: ${errorMessage}`);
-    }
-
-    let batch;
-    try {
-      batch = await r.json();
-    } catch (jsonError) {
-      throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
-    }
-
-    if (isAnthropic) {
-      return batch.content[0].text
-        .trim()
-        .split("\n")[0]
-        .split(" ")
-        .slice(0, 3)
-        .join(" ");
-    } else {
-      return batch.choices[0]["message"]["content"]
-        .trim()
-        .split("\n")[0]
-        .split(" ")
-        .slice(0, 3)
-        .join(" ");
-    }
-  } else {
-    const tp = {
-      "api-key": params["api-key"],
-      "output-branches": 1,
-      "model-name": params["model-name"],
-      "tokens-per-branch": 10,
-      temperature: params["temperature"],
-      "top-p": params["top-p"],
-      "top-k": params["top-k"],
-      repetition_penalty: params["repetition-penalty"],
-    };
-    let batch;
-    if (params["sampling-method"] === "openai") {
-      batch = await togetherGetResponses({
-        endpoint: endpoint,
-        prompt: prompt,
-        togetherParams: tp,
-        openai: true,
-      });
-    } else {
-      batch = await togetherGetResponses({
-        endpoint: endpoint,
-        prompt: prompt,
-        togetherParams: tp,
-      });
-    }
-    return batch[0]["text"]
-      .trim()
-      .split("\n")[0]
-      .split(" ")
-      .slice(0, 3)
-      .join(" ");
-  }
-}
-
-async function rewriteNode(id) {
-  const endpoint = document.getElementById("api-url").value;
-  const rewriteNodePrompt = document.getElementById("rewrite-node-prompt");
-
-  // Use safe API to read prompt file
-  const rewritePrompt = await window.electronAPI.readPromptFile("rewrite.txt");
-  const rewriteFeedback = rewriteNodePrompt.value;
-  const rewriteContext = editor.value;
-
-  // TODO: Add new endpoint? Make tokenizer that returns to client?
-  // Could also make dedicated rewriteNode endpoint
-  let tokens = document.getElementById("tokens-per-branch").value;
-  const outputBranches = document.getElementById("output-branches").value;
-
-  // Make sure we don't give too much or too little context
-  // TODO: Change this once models have longer context/are less limited
-  if (tokens < 256) {
-    tokens = 256;
-  } else if (tokens > 512) {
-    tokens = 512;
-  }
-
-  let prompt = rewritePrompt.trim();
-  prompt += rewriteContext.slice(-(tokens * 8)).trim();
-  prompt += "\n\n";
-  prompt += "Rewrite the text using the following feedback:\n";
-  prompt += rewriteFeedback;
-  prompt += "<|end|>";
-
-  diceSetup();
-  r = await fetch(endpoint + "generate", {
-    method: "POST",
-    body: JSON.stringify({
-      prompt: prompt,
-      prompt_node: false,
-      adapter: "evaluator",
-      evaluationPrompt: "",
-      tokens_per_branch: tokens,
-      output_branches: outputBranches,
-    }),
-    headers: {
-      "Content-type": "application/json; charset=UTF-8",
-    },
-  });
-  let batch = await r.json();
-  console.log(batch);
-
-  const focusParent = loomTree.nodeStore[focus.parent];
-  const focusParentText = loomTree.renderNode(focusParent);
-  for (i = 0; i < batch.length; i++) {
-    let response = batch[i];
-    let summary = await getSummary(response["text"]);
-    const responseNode = loomTree.createNode(
-      "rewrite",
-      focus,
-      focusParentText + response["text"],
-      summary
-    );
-    loomTree.nodeStore[responseNode.id]["feedback"] = rewriteFeedback;
-    loomTree.nodeStore[responseNode.id]["rewritePrompt"] = prompt;
-    loomTree.nodeStore[responseNode.id]["model"] = response["base_model"];
-  }
-  const chatPane = document.getElementById("chat-pane");
-  chatPane.innerHTML = "";
-  diceTeardown();
-  renderTick();
-}
-
-function promptRewriteNode(id) {
-  const rewriteNodeLabel = document.createElement("label");
-  rewriteNodeLabel.for = "rewrite-node-prompt";
-  rewriteNodeLabel.textContent = "Rewrite Node From Feedback";
-  const rewriteNodePrompt = document.createElement("textarea");
-  rewriteNodePrompt.id = "rewrite-node-prompt";
-  rewriteNodePrompt.value = "";
-  rewriteNodePrompt.placeholder =
-    "Write 3-5 bulletpoints of feedback to rewrite the node with.";
-  const rewriteNodeSubmit = document.createElement("input");
-  rewriteNodeSubmit.id = "rewrite-node-submit";
-  rewriteNodeSubmit.type = "button";
-  rewriteNodeSubmit.value = "Submit";
-  rewriteNodeSubmit.onclick = () => rewriteNode(focus.id);
-
-  const chatPane = document.getElementById("chat-pane");
-  chatPane.append(rewriteNodeLabel, rewriteNodePrompt, rewriteNodeSubmit);
-}
-
-function promptThumbsUp(id) {
-  const thumbUp = document.getElementById("thumb-up");
-  const thumbDown = document.getElementById("thumb-down");
-
-  // If already selected, unselect it
-  if (loomTree.nodeStore[id].rating === true) {
-    loomTree.nodeStore[id].rating = null;
-    thumbUp.classList.remove("chosen");
-  } else {
-    // Select this one and unselect the other
-    loomTree.nodeStore[id].rating = true;
-    thumbUp.classList.add("chosen");
-    thumbDown.classList.remove("chosen");
-  }
-
-  // Update tree view to reflect the rating change
-  const loomTreeView = document.getElementById("loom-tree-view");
-  if (loomTreeView) {
-    loomTreeView.innerHTML = "";
-    renderTree(focus, loomTreeView);
-  }
-}
-
-function promptThumbsDown(id) {
-  const thumbUp = document.getElementById("thumb-up");
-  const thumbDown = document.getElementById("thumb-down");
-
-  // If already selected, unselect it
-  if (loomTree.nodeStore[id].rating === false) {
-    loomTree.nodeStore[id].rating = null;
-    thumbDown.classList.remove("chosen");
-  } else {
-    // Select this one and unselect the other
-    loomTree.nodeStore[id].rating = false;
-    thumbDown.classList.add("chosen");
-    thumbUp.classList.remove("chosen");
-  }
-
-  // Update tree view to reflect the rating change
-  const loomTreeView = document.getElementById("loom-tree-view");
-  if (loomTreeView) {
-    loomTreeView.innerHTML = "";
-    renderTree(focus, loomTreeView);
+function updateFocusedNodeTitle() {
+  if (focusedNodeTitle) {
+    const title =
+      (appState.focusedNode.summary || "").trim() || "Untitled Node";
+    focusedNodeTitle.textContent = title;
   }
 }
 
 function updateThumbState() {
-  const thumbUp = document.getElementById("thumb-up");
-  const thumbDown = document.getElementById("thumb-down");
   if (thumbUp && thumbDown) {
     thumbUp.classList.remove("chosen");
     thumbDown.classList.remove("chosen");
-    if (focus.rating === true) {
+
+    if (appState.focusedNode.rating === true) {
       thumbUp.classList.add("chosen");
-    } else if (focus.rating === false) {
+    } else if (appState.focusedNode.rating === false) {
       thumbDown.classList.add("chosen");
     }
   }
 }
 
-const die = document.getElementById("die");
-
-function diceSetup() {
-  editor.readOnly = true;
-  if (die) {
-    die.classList.add("rolling");
-  }
-}
-
-function diceTeardown() {
-  editor.readOnly = false;
-  if (die) {
-    die.classList.remove("rolling");
-  }
-  // Clear any existing errors when generation completes
-  errorMessage.textContent = "";
-  document.getElementById("errors").classList.remove("has-error");
-}
-
-async function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function togetherGetResponses({
-  endpoint,
-  prompt,
-  togetherParams = {},
-  api = "openai",
-}) {
-  const tp = togetherParams;
-  const auth_token = "Bearer " + tp["api-key"];
-  const apiDelay = Number(tp["delay"]);
-
-  // Debug logging
-  console.log("togetherGetResponses called with:", {
-    endpoint,
-    api,
-    auth_token: tp["api-key"] ? "Bearer ***" : "NO API KEY",
-    model: tp["model-name"],
-    prompt_length: prompt.length,
-  });
-
-  let batch_promises = [];
-  // Together doesn't let you get more than one completion at a time
-  // But OpenAI expects you to use the n parameter
-  let calls = api === "openai" ? 1 : tp["output-branches"];
-  for (let i = 1; i <= calls; i++) {
-    const body = {
-      model: tp["model-name"],
-      prompt: prompt,
-      max_tokens: Number(tp["tokens-per-branch"]),
-      n: api === "openai" ? Number(tp["output-branches"]) : 1,
-      temperature: Number(tp["temperature"]),
-      top_p: Number(tp["top-p"]),
-      top_k: Number(tp["top-k"]),
-      repetition_penalty: Number(tp["repetition_penalty"]),
-    };
-    if (api === "openrouter") {
-      body["provider"] = {};
-      body["provider"]["require_parameters"] = true;
-    }
-
-    console.log("Making API request to:", endpoint);
-    console.log("Request body:", body);
-
-    const promise = delay(apiDelay * i)
-      .then(async () => {
-        let r = await fetch(endpoint, {
-          method: "POST",
-          body: JSON.stringify(body),
-          headers: {
-            accept: "application/json",
-            "Content-type": "application/json; charset=UTF-8",
-            Authorization: auth_token,
-          },
-        });
-
-        console.log("API response status:", r.status);
-        console.log(
-          "API response headers:",
-          Object.fromEntries(r.headers.entries())
-        );
-
-        if (!r.ok) {
-          const errorText = await r.text();
-          console.error("API error response:", errorText);
-          throw new Error(`API request failed: ${r.status} ${r.statusText}`);
-        }
-
-        return r.json();
-      })
-      .then(response_json => {
-        console.log("API response JSON:", response_json);
-        let outs = [];
-        let choices_length;
-        if (api === "openai") {
-          choices_length = response_json["choices"].length;
-        } else if (api === "openrouter") {
-          choices_length = response_json["choices"].length;
-        } else {
-          choices_length = response_json["output"]["choices"].length;
-        }
-        for (let i = 0; i < choices_length; i++) {
-          if (api === "openai") {
-            outs.push({
-              text: response_json["choices"][i]["text"],
-              model: response_json["model"],
-            });
-          } else if (api === "openrouter") {
-            outs.push({
-              text: response_json["choices"][i]["text"],
-              model: response_json["model"],
-            });
-          } else {
-            outs.push({
-              text: response_json["output"]["choices"][i]["text"],
-              model: response_json["model"],
-            });
-          }
-        }
-        if (api === "openai") {
-          return outs;
-        } else {
-          return outs[0];
-        }
-      });
-    batch_promises.push(promise);
-  }
-  let batch;
-  if (api === "openai") {
-    batch = await Promise.all(batch_promises);
-    batch = batch[0];
-  } else {
-    batch = await Promise.all(batch_promises);
-  }
-  return batch;
-}
-
-async function reroll(id, weave = true) {
-  const params = prepareRollParams();
-  if (params["sampling-method"] === "base") {
-    // Use togetherRoll for base method
-    togetherRoll(id, "base");
-  } else if (params["sampling-method"] === "vae-guided") {
-    // vae-guided not implemented, fall back to base
-    togetherRoll(id, "base");
-  } else if (params["sampling-method"] === "together") {
-    togetherRoll(id, "together");
-  } else if (params["sampling-method"] === "openrouter") {
-    togetherRoll(id, "openrouter");
-  } else if (params["sampling-method"] === "openai") {
-    togetherRoll(id, "openai");
-  } else if (params["sampling-method"] === "openai-chat") {
-    await openaiChatCompletionsRoll(id);
-  } else {
-    // Default fallback
-    togetherRoll(id, "base");
-  }
-}
-
-async function togetherRoll(id, api = "openai") {
-  diceSetup();
-  await autoSaveTick();
-  await updateFocusSummary();
-  const rollFocus = loomTree.nodeStore[id];
-  const lastChildIndex =
-    rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-  // Use current editor content instead of rendered tree content
-  let prompt = editor.value;
-  const params = prepareRollParams();
-
-  const apiDelay = params["api-delay"];
-  const tp = {
-    "api-key": params["api-key"],
-    "model-name": params["model-name"],
-    "output-branches": params["output-branches"],
-    "tokens-per-branch": params["tokens-per-branch"],
-    temperature: params["temperature"],
-    "top-p": params["top-p"],
-    "top-k": params["top-k"],
-    repetition_penalty: params["repetition-penalty"],
-    delay: apiDelay,
-  };
-  let newResponses;
-  try {
-    newResponses = await togetherGetResponses({
-      endpoint: params["api-url"],
-      prompt: prompt,
-      togetherParams: tp,
-      api: api,
-    });
-  } catch (error) {
-    diceTeardown();
-    errorMessage.textContent = "Error: " + error.message;
-    document.getElementById("errors").classList.add("has-error");
-    console.warn(error);
-    throw error;
-  }
-  for (let i = 0; i < newResponses.length; i++) {
-    response = newResponses[i];
-    const responseSummary = await delay(apiDelay).then(() => {
-      return getSummary(response["text"]);
-    });
-    const childText = loomTree.renderNode(rollFocus) + response["text"];
-    const responseNode = loomTree.createNode(
-      "gen",
-      rollFocus,
-      childText,
-      responseSummary
-    );
-    loomTree.nodeStore[responseNode.id]["model"] = response["model"];
-  }
-  // Focus on the first newly generated response, but only if we're still on the same node
-  if (focus === rollFocus) {
-    if (lastChildIndex === null) {
-      // No children before, focus on the first one
-      focus = loomTree.nodeStore[rollFocus.children[0]];
-    } else {
-      // Focus on the first new child (lastChildIndex + 1)
-      focus = loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]];
-    }
-  }
-  diceTeardown();
-  renderTick();
-}
-
-// Add this function for OpenAI Chat Completions API calls
-async function openaiChatCompletionsRoll(id) {
-  diceSetup();
-  await autoSaveTick();
-  await updateFocusSummary();
-  const rollFocus = loomTree.nodeStore[id];
-  const lastChildIndex =
-    rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-  let promptText = loomTree.renderNode(rollFocus);
-  const params = prepareRollParams();
-
-  try {
-    // Try to parse as JSON first, if it fails, convert regular text to chat format
-    let chatData;
-    try {
-      chatData = JSON.parse(promptText);
-      if (!chatData.messages || !Array.isArray(chatData.messages)) {
-        throw new Error("Invalid chat format: messages array not found");
-      }
-    } catch (jsonError) {
-      // If it's not valid JSON, convert the text to a chat format
-      chatData = {
-        messages: [
-          {
-            role: "user",
-            content: promptText.trim(),
-          },
-        ],
-      };
-    }
-
-    const apiKey = params["api-key"];
-    const modelName = params["model-name"];
-    const temperature = parseFloat(params["temperature"]);
-    const topP = parseFloat(params["top-p"]);
-    const outputBranches = parseInt(params["output-branches"]);
-    const tokensPerBranch = parseInt(params["tokens-per-branch"]);
-
-    // Check if this is Anthropic API
-    const isAnthropic = params["api-url"].includes("api.anthropic.com");
-
-    // Prepare the API request
-    let requestBody;
-    let requestUrl = params["api-url"];
-    let headers = {
-      "Content-Type": "application/json",
-    };
-
-    if (isAnthropic) {
-      // Anthropic API format
-      requestUrl = "https://api.anthropic.com/v1/messages";
-      headers["x-api-key"] = apiKey;
-      headers["anthropic-version"] = "2023-06-01";
-
-      requestBody = {
-        model: modelName,
-        messages: chatData.messages,
-        max_tokens: tokensPerBranch,
-        temperature: temperature,
-        top_p: topP,
-      };
-    } else {
-      // OpenAI format
-      headers.Authorization = `Bearer ${apiKey}`;
-
-      requestBody = {
-        model: modelName,
-        messages: chatData.messages,
-        max_tokens: tokensPerBranch,
-        temperature: temperature,
-        top_p: topP,
-        n: outputBranches,
-      };
-    }
-
-    // Make the API call
-    const response = await fetch(requestUrl, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      let errorMessage = response.statusText;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error?.message || errorMessage;
-      } catch (jsonError) {
-        // If response is not JSON, try to get text content
-        try {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-        } catch (textError) {
-          // If we can't even get text, use status text
-          errorMessage = response.statusText;
-        }
-      }
-      throw new Error(`OpenAI API Error: ${errorMessage}`);
-    }
-
-    let responseData;
-    try {
-      responseData = await response.json();
-    } catch (jsonError) {
-      throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
-    }
-
-    // Process responses based on API type
-    if (isAnthropic) {
-      // Handle Anthropic response format
-      const assistantMessage = responseData.content[0];
-
-      // Create a new chat data object with the assistant's response
-      const newChatData = JSON.parse(JSON.stringify(chatData)); // Deep clone
-      newChatData.messages.push({
-        role: "assistant",
-        content: assistantMessage.text,
-      });
-
-      const newChatText = JSON.stringify(newChatData, null, 2);
-
-      // Generate a summary for the new node
-      const summary = await getSummary(
-        assistantMessage.text || "Assistant response"
-      );
-
-      // Create the new node
-      const responseNode = loomTree.createNode(
-        "gen",
-        rollFocus,
-        newChatText,
-        summary
-      );
-
-      // Store metadata
-      loomTree.nodeStore[responseNode.id]["model"] = responseData.model;
-      loomTree.nodeStore[responseNode.id]["usage"] = responseData.usage;
-      loomTree.nodeStore[responseNode.id]["finish_reason"] =
-        responseData.stop_reason;
-    } else {
-      // Handle OpenAI response format
-      for (let i = 0; i < responseData.choices.length; i++) {
-        const choice = responseData.choices[i];
-        const assistantMessage = choice.message;
-
-        // Create a new chat data object with the assistant's response
-        const newChatData = JSON.parse(JSON.stringify(chatData)); // Deep clone
-        newChatData.messages.push({
-          role: assistantMessage.role,
-          content: assistantMessage.content,
-        });
-
-        const newChatText = JSON.stringify(newChatData, null, 2);
-
-        // Generate a summary for the new node
-        const summary = await getSummary(
-          assistantMessage.content || "Assistant response"
-        );
-
-        // Create the new node
-        const responseNode = loomTree.createNode(
-          "gen",
-          rollFocus,
-          newChatText,
-          summary
-        );
-
-        // Store metadata
-        loomTree.nodeStore[responseNode.id]["model"] = responseData.model;
-        loomTree.nodeStore[responseNode.id]["usage"] = responseData.usage;
-        loomTree.nodeStore[responseNode.id]["finish_reason"] =
-          choice.finish_reason;
-      }
-    }
-
-    // Focus on the first newly generated response, but only if we're still on the same node
-    if (focus === rollFocus) {
-      if (lastChildIndex === null) {
-        // No children before, focus on the first one
-        focus = loomTree.nodeStore[rollFocus.children[0]];
-      } else {
-        // Focus on the first new child (lastChildIndex + 1)
-        focus = loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]];
-      }
-    }
-  } catch (error) {
-    diceTeardown();
-    errorMessage.textContent = "Error: " + error.message;
-    document.getElementById("errors").classList.add("has-error");
-    console.error("OpenAI Chat Completions Error:", error);
-    return;
-  }
-
-  diceTeardown();
-  renderTick();
-}
-
 function updateCounterDisplay(text) {
-  const charCount = countCharacters(text);
-  const wordCount = countWords(text);
-
+  const charCount = utils.countCharacters(text);
+  const wordCount = utils.countWords(text);
   promptTokenCounter.innerText = `${wordCount} Words (${charCount} Characters)`;
 }
 
-var secondsSinceLastTyped = 0;
-var updatingNode = false;
+/**
+ * Rating Management
+ */
+function handleThumbsUp() {
+  const newRating = appState.focusedNode.rating === true ? null : true;
+  appState.loomTree.updateNodeRating(appState.focusedNode.id, newRating);
+  updateThumbState();
+  treeNav.updateTreeView();
+}
+
+function handleThumbsDown() {
+  const newRating = appState.focusedNode.rating === false ? null : false;
+  appState.loomTree.updateNodeRating(appState.focusedNode.id, newRating);
+  updateThumbState();
+  treeNav.updateTreeView();
+}
+
+/**
+ * Editor Event Handlers
+ */
 
 editor.addEventListener("input", async e => {
   const prompt = editor.value;
-  // Autosave users work when writing next prompt
+
+  // Auto-save user work when writing next prompt
   if (
-    focus.children.length > 0 ||
-    ["gen", "rewrite", "root"].includes(focus.type)
+    appState.focusedNode.children.length > 0 ||
+    ["gen", "rewrite", "root"].includes(appState.focusedNode.type)
   ) {
-    const child = loomTree.createNode("user", focus, prompt, "New Node");
-    changeFocus(child.id);
+    const child = appState.loomTree.createNode(
+      "user",
+      appState.focusedNode,
+      prompt,
+      "New Node"
+    );
+    setFocusedNode(child.id);
   }
 });
 
 editor.addEventListener("keydown", async e => {
-  secondsSinceLastTyped = 0;
   const prompt = editor.value;
-  const params = prepareRollParams();
+  const params = llmService.prepareRollParams();
 
-  if (focus.children.length == 0 && focus.type == "user" && !updatingNode) {
-    updatingNode = true;
-    loomTree.updateNode(focus, prompt, focus.summary);
-    updatingNode = false;
+  // Update user node content while typing
+  if (
+    appState.focusedNode.children.length === 0 &&
+    appState.focusedNode.type === "user" &&
+    !appState.updatingNode
+  ) {
+    appState.updatingNode = true;
+    appState.loomTree.updateNode(
+      appState.focusedNode,
+      prompt,
+      appState.focusedNode.summary
+    );
+    appState.updatingNode = false;
   }
 
   // Update character/word count on every keystroke
   updateCounterDisplay(prompt);
 
-  if (prompt.length % 32 == 0) {
-    // Removed the fetch call to check-tokens endpoint
-
-    // Update summary while user is writing next prompt
+  // Generate summary while user is writing (every 32 characters)
+  if (prompt.length % 32 === 0) {
     if (
-      focus.children.length == 0 &&
-      focus.type == "user" &&
+      appState.focusedNode.children.length === 0 &&
+      appState.focusedNode.type === "user" &&
       [
         "base",
         "vae-base",
@@ -1163,32 +376,37 @@ editor.addEventListener("keydown", async e => {
         "vae-paragraph",
         "vae-bridge",
       ].includes(params["sampling-method"]) &&
-      !updatingNode
+      !appState.updatingNode
     ) {
       try {
-        updatingNode = true;
-        const summary = await getSummary(prompt);
-        loomTree.updateNode(focus, prompt, summary);
-        updatingNode = false;
+        appState.updatingNode = true;
+        const summary = await llmService.getSummary(prompt);
+        appState.loomTree.updateNode(appState.focusedNode, prompt, summary);
+        appState.updatingNode = false;
       } catch (error) {
-        console.log(error);
-        updatingNode = false;
+        console.error("Summary generation error:", error);
+        appState.updatingNode = false;
       }
     }
-    // Render only the loom tree so we don't interrupt their typing
-    loomTreeView.innerHTML = "";
-    renderTree(focus, loomTreeView);
+    treeNav.updateTreeView();
   }
-  // Check for Control+Enter or Command+Enter (Mac)
-  if (e.key == "Enter" && (e.ctrlKey || e.metaKey)) {
-    reroll(focus.id, settingUseWeave?.checked ?? true);
+
+  // Generate on Ctrl/Cmd+Enter
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    llmService.reroll(
+      appState.focusedNode.id,
+      settingUseWeave?.checked ?? true
+    );
   }
 });
 
+/**
+ * File Operations
+ */
 async function saveFile() {
   const data = {
-    loomTree,
-    focus: focus,
+    loomTree: appState.loomTree,
+    focus: appState.focusedNode,
   };
   try {
     await window.electronAPI.saveFile(data);
@@ -1201,16 +419,31 @@ async function loadFile() {
   try {
     const data = await window.electronAPI.loadFile();
     if (data) {
-      loomTreeRaw = data.loomTree;
-      loomTree = Object.assign(new LoomTree(), loomTreeRaw);
-      focus = loomTree.nodeStore[data.focus.id];
+      const newLoomTree = new LoomTree();
+      newLoomTree.loadFromData(data.loomTree);
 
-      // Rebuild search index when tree is reloaded
-      if (window.searchManager && window.searchManager.rebuildIndex) {
+      // Update global state
+      appState.loomTree = newLoomTree;
+
+      // Set focus to saved focus or root
+      const savedFocus =
+        data.focus && data.focus.id
+          ? newLoomTree.nodeStore[data.focus.id]
+          : newLoomTree.root;
+
+      if (!savedFocus) {
+        console.warn("Saved focus node not found, using root");
+        appState.focusedNode = newLoomTree.root;
+      } else {
+        appState.focusedNode = savedFocus;
+      }
+
+      // Rebuild search index
+      if (window.searchManager) {
         window.searchManager.rebuildIndex();
       }
 
-      renderTick();
+      renderFocusedNode();
     }
   } catch (err) {
     console.error("Load File Error:", err);
@@ -1218,11 +451,17 @@ async function loadFile() {
 }
 
 async function autoSave() {
+  if (!appState.focusedNode) {
+    console.warn("Cannot auto-save: no focused node");
+    return;
+  }
+
   const data = {
-    loomTree,
-    focus: focus,
-    samplerSettingsStore: samplerSettingsStore,
+    loomTree: appState.loomTree,
+    focus: appState.focusedNode,
+    samplerSettingsStore: appState.samplerSettingsStore,
   };
+
   try {
     await window.electronAPI.autoSave(data);
   } catch (err) {
@@ -1230,16 +469,188 @@ async function autoSave() {
   }
 }
 
-var secondsSinceLastSave = 0;
+// Auto-save timer
 async function autoSaveTick() {
-  secondsSinceLastSave += 1;
-  secondsSinceLastTyped += 1;
-  if (secondsSinceLastSave == 30 || secondsSinceLastSave > 40) {
+  appState.secondsSinceLastSave += 1;
+  if (appState.secondsSinceLastSave >= 30) {
     autoSave();
-    secondsSinceLastSave = 0;
+    appState.secondsSinceLastSave = 0;
   }
 }
 
+var autoSaveIntervalId = setInterval(autoSaveTick, 1000);
+
+// Make necessary functions globally available
+window.updateCounterDisplay = updateCounterDisplay;
+
+/**
+ * Settings Management
+ */
+
+async function loadSettings() {
+  try {
+    const data = await window.electronAPI.loadSettings();
+    appState.updateSamplerSettingsStore(data || {});
+    window.samplerSettingsStore = appState.samplerSettingsStore;
+  } catch (err) {
+    console.error("Load Settings Error:", err);
+    appState.updateSamplerSettingsStore({});
+    window.samplerSettingsStore = appState.samplerSettingsStore;
+  }
+}
+
+const onSettingsUpdated = async () => {
+  try {
+    const data = await window.electronAPI.loadSettings();
+    if (data != null) {
+      appState.updateSamplerSettingsStore(data);
+      window.samplerSettingsStore = appState.samplerSettingsStore;
+      populateServiceSelector();
+      populateSamplerSelector();
+      populateApiKeySelector();
+    }
+  } catch (err) {
+    console.error("Load Settings Error:", err);
+  }
+};
+
+/**
+ * Initialization
+ */
+async function init() {
+  try {
+    await loadSettings();
+
+    // Initialize services
+    llmService = new LLMService({
+      autoSaveTick: autoSaveTick,
+      updateFocusSummary: updateFocusSummary,
+      renderTick: renderFocusedNode,
+      setFocus: newFocus => {
+        appState.focusedNode = newFocus;
+      },
+      updateLoomTree: newLoomTree => {
+        appState.loomTree = newLoomTree;
+      },
+      updateEditor: newEditor => {
+        Object.assign(editor, newEditor);
+      },
+      updateNodeMetadata: (nodeId, metadata) => {
+        if (appState.loomTree.nodeStore[nodeId]) {
+          Object.assign(appState.loomTree.nodeStore[nodeId], metadata);
+        }
+      },
+      getFocus: () => appState.getFocusedNode(),
+      getLoomTree: () => appState.getLoomTree(),
+      getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
+      getEditor: () => editor,
+      setEditorReadOnly: readOnly => {
+        editor.readOnly = readOnly;
+      },
+    });
+
+    treeNav = new TreeNav(
+      nodeId => {
+        setFocusedNode(nodeId);
+      },
+      {
+        getFocus: () => appState.getFocusedNode(),
+        getLoomTree: () => appState.getLoomTree(),
+      }
+    );
+
+    // Initialize search manager
+    const searchManager = new SearchManager({
+      getLoomTree: () => appState.getLoomTree(),
+      getFocus: () => appState.getFocusedNode(),
+      onNodeFocus: nodeId => {
+        setFocusedNode(nodeId);
+      },
+      getFocusId: () => appState.getFocusedNode().id,
+      treeNav: treeNav,
+    });
+
+    // Make services globally available
+    window.llmService = llmService;
+    window.treeNav = treeNav;
+    window.searchManager = searchManager;
+
+    // Initialize tree view
+    const loomTreeView = document.getElementById("loom-tree-view");
+    treeNav.renderTree(appState.loomTree.root, loomTreeView);
+
+    // Set up settings event listener
+    window.electronAPI.onSettingsUpdated(onSettingsUpdated);
+
+    // Populate selectors
+    populateServiceSelector();
+    populateSamplerSelector();
+    populateApiKeySelector();
+    addSettingsChangeListeners();
+
+    // Set up event handlers
+    setupEventHandlers();
+
+    // Initial render
+    renderFocusedNode();
+
+    // Check for new user setup
+    checkForNewUser();
+  } catch (error) {
+    console.error("Initialization failed:", error);
+  }
+}
+
+function setupEventHandlers() {
+  // Generate button
+  if (generateButton) {
+    generateButton.onclick = () =>
+      llmService.reroll(appState.focusedNode.id, false);
+  }
+
+  // Thumb buttons
+  if (thumbUp) {
+    thumbUp.onclick = handleThumbsUp;
+  }
+  if (thumbDown) {
+    thumbDown.onclick = handleThumbsDown;
+  }
+
+  // Settings labels
+  const serviceLabel = document.querySelector(
+    '.control-group label[title="Service"]'
+  );
+  const apiKeyLabel = document.querySelector(
+    '.control-group label[title="API Key"]'
+  );
+  const samplerLabel = document.querySelector(
+    '.control-group label[title="Sampler"]'
+  );
+
+  if (serviceLabel) {
+    serviceLabel.style.cursor = "pointer";
+    serviceLabel.onclick = () =>
+      window.electronAPI.openSettingsToTab("services");
+  }
+  if (apiKeyLabel) {
+    apiKeyLabel.style.cursor = "pointer";
+    apiKeyLabel.onclick = () =>
+      window.electronAPI.openSettingsToTab("api-keys");
+  }
+  if (samplerLabel) {
+    samplerLabel.style.cursor = "pointer";
+    samplerLabel.onclick = () =>
+      window.electronAPI.openSettingsToTab("samplers");
+  }
+
+  // Context menu
+  editor.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    window.electronAPI.showContextMenu();
+  });
+}
+
+// Electron API event handlers
 window.electronAPI.onUpdateFilename(
   (event, filename, creationTime, filePath) => {
     const filenameElement = document.getElementById("current-filename");
@@ -1248,54 +659,13 @@ window.electronAPI.onUpdateFilename(
 
       if (creationTime) {
         const formattedTime = new Date(creationTime).toLocaleString();
-        filenameElement.title = `File: ${filePath || "Unknown"}
-Created: ${formattedTime}`;
+        filenameElement.title = `File: ${filePath || "Unknown"}\nCreated: ${formattedTime}`;
       } else {
         filenameElement.title = `File: ${filePath || "Unknown"}`;
       }
     }
   }
 );
-const onSettingsUpdated = async () => {
-  try {
-    const data = await window.electronAPI.loadSettings();
-    if (data != null) {
-      samplerSettingsStore = data;
-      console.log("Settings updated, new data:", data);
-      // Refresh the selectors with new data
-      populateServiceSelector();
-      populateSamplerSelector();
-      populateApiKeySelector();
-    } else {
-      console.log("Settings update returned null data");
-    }
-  } catch (err) {
-    console.error("Load Settings Error:", err);
-  }
-};
-
-// Settings event listener will be set up in init() function
-
-async function updateFocusSummary() {
-  if (focus.type == "user" && focus.children.length == 0 && !updatingNode) {
-    const currentFocus = focus; // Stop focus from changing out underneath us
-    const newPrompt = editor.value;
-    const prompt = loomTree.renderNode(currentFocus);
-    updatingNode = true;
-    try {
-      let summary = await getSummary(prompt);
-      if (summary.trim() === "") {
-        summary = "Summary Not Given";
-      }
-      loomTree.updateNode(currentFocus, newPrompt, summary);
-    } catch (error) {
-      loomTree.updateNode(currentFocus, newPrompt, "Server Response Error");
-    }
-    updatingNode = false;
-  }
-}
-
-var autoSaveIntervalId = setInterval(autoSaveTick, 1000);
 
 window.electronAPI.onInvokeAction((event, action) => {
   switch (action) {
@@ -1306,150 +676,62 @@ window.electronAPI.onInvokeAction((event, action) => {
       loadFile();
       break;
     default:
-      console.log("Action not recognized", action);
+      console.warn("Action not recognized:", action);
   }
 });
 
-// Helper function to validate chat JSON
-function isValidChatJson(text) {
-  try {
-    const data = JSON.parse(text);
-    return data.messages && Array.isArray(data.messages);
-  } catch (e) {
-    return false;
+// Helper function for summary updates
+async function updateFocusSummary() {
+  if (
+    appState.focusedNode.type === "user" &&
+    appState.focusedNode.children.length === 0 &&
+    !appState.updatingNode
+  ) {
+    const currentFocus = appState.focusedNode;
+    const newPrompt = editor.value;
+    const prompt = appState.loomTree.renderNode(currentFocus);
+
+    appState.updatingNode = true;
+    try {
+      let summary = await llmService.getSummary(prompt);
+      if (summary.trim() === "") {
+        summary = "Summary Not Given";
+      }
+      appState.loomTree.updateNode(currentFocus, newPrompt, summary);
+    } catch (error) {
+      appState.loomTree.updateNode(
+        currentFocus,
+        newPrompt,
+        "Server Response Error"
+      );
+    }
+    appState.updatingNode = false;
   }
 }
 
-editor.addEventListener("contextmenu", e => {
-  e.preventDefault();
-  window.electronAPI.showContextMenu();
-});
-
-let samplerSettingsStore;
-
-async function loadSettings() {
-  try {
-    console.log("Loading settings...");
-    const data = await window.electronAPI.loadSettings();
-    console.log("Settings data received:", data);
-    if (data != null) {
-      samplerSettingsStore = data;
-      console.log("Settings stored successfully");
-    } else {
-      console.log("No settings data received, using empty store");
-      samplerSettingsStore = {};
-    }
-  } catch (err) {
-    console.error("Load Settings Error:", err);
-    samplerSettingsStore = {};
-  }
-}
-
-async function init() {
-  try {
-    console.log("Starting initialization...");
-    await loadSettings();
-    console.log("Settings loaded:", samplerSettingsStore);
-
-    // Set up settings event listener
-    window.electronAPI.onSettingsUpdated(onSettingsUpdated);
-
-    // Populate the new Services and Samplers selectors
-    populateServiceSelector();
-    populateSamplerSelector();
-    populateApiKeySelector();
-
-    // Add change listeners to save settings automatically
-    addSettingsChangeListeners();
-
-    // Add click handlers to thumbs
-    const thumbUp = document.getElementById("thumb-up");
-    const thumbDown = document.getElementById("thumb-down");
-
-    if (thumbUp) {
-      thumbUp.onclick = () => promptThumbsUp(focus.id);
-    }
-    if (thumbDown) {
-      thumbDown.onclick = () => promptThumbsDown(focus.id);
-    }
-
-    // Add click handlers to emoji labels in bottom bar
-    const serviceLabel = document.querySelector(
-      '.control-group label[title="Service"]'
-    );
-    const apiKeyLabel = document.querySelector(
-      '.control-group label[title="API Key"]'
-    );
-    const samplerLabel = document.querySelector(
-      '.control-group label[title="Sampler"]'
-    );
-
-    if (serviceLabel) {
-      serviceLabel.style.cursor = "pointer";
-      serviceLabel.onclick = () =>
-        window.electronAPI.openSettingsToTab("services");
-    }
-    if (apiKeyLabel) {
-      apiKeyLabel.style.cursor = "pointer";
-      apiKeyLabel.onclick = () =>
-        window.electronAPI.openSettingsToTab("api-keys");
-    }
-    if (samplerLabel) {
-      samplerLabel.style.cursor = "pointer";
-      samplerLabel.onclick = () =>
-        window.electronAPI.openSettingsToTab("samplers");
-    }
-
-    renderTick();
-
-    // Update initial thumb state
-    updateThumbState();
-
-    // Check if this is a new user (no services configured)
-    checkForNewUser();
-
-    console.log("Initialization complete");
-  } catch (error) {
-    console.error("Initialization failed:", error);
-  }
-}
-
-// Check if user is new and needs initial setup
-async function checkForNewUser() {
+// Settings helper functions
+function checkForNewUser() {
   const hasServices =
-    samplerSettingsStore &&
-    samplerSettingsStore.services &&
-    Object.keys(samplerSettingsStore.services).length > 0;
+    appState.samplerSettingsStore &&
+    appState.samplerSettingsStore.services &&
+    Object.keys(appState.samplerSettingsStore.services).length > 0;
 
   if (!hasServices) {
     // Auto-create default services if none exist
-    if (!samplerSettingsStore.services) {
-      samplerSettingsStore.services = {};
-    }
-
-    // Add default OpenAI service if API key exists
-    if (
-      samplerSettingsStore["api-keys"] &&
-      samplerSettingsStore["api-keys"]["OpenAI"]
-    ) {
-      samplerSettingsStore.services["OpenAI Default"] = {
-        "sampling-method": "openai",
-        "service-api-url": "https://api.openai.com/v1/completions",
-        "service-model-name": "gpt-3.5-turbo-instruct",
-        "service-api-delay": "3000",
-      };
+    if (!appState.samplerSettingsStore.services) {
+      appState.samplerSettingsStore.services = {};
     }
 
     // Auto-create default sampler if none exist
     if (
-      !samplerSettingsStore.samplers ||
-      Object.keys(samplerSettingsStore.samplers).length === 0
+      !appState.samplerSettingsStore.samplers ||
+      Object.keys(appState.samplerSettingsStore.samplers).length === 0
     ) {
-      if (!samplerSettingsStore.samplers) {
-        samplerSettingsStore.samplers = {};
+      if (!appState.samplerSettingsStore.samplers) {
+        appState.samplerSettingsStore.samplers = {};
       }
 
-      samplerSettingsStore.samplers["Default"] = {
+      appState.samplerSettingsStore.samplers["Default"] = {
         "output-branches": "2",
         "tokens-per-branch": "256",
         temperature: "0.9",
@@ -1460,7 +742,7 @@ async function checkForNewUser() {
     }
 
     try {
-      await window.electronAPI.saveSettings(samplerSettingsStore);
+      window.electronAPI.saveSettings(appState.samplerSettingsStore);
       populateServiceSelector();
       populateSamplerSelector();
     } catch (error) {
@@ -1470,27 +752,33 @@ async function checkForNewUser() {
     // Auto-open settings for new user
     setTimeout(() => {
       window.electronAPI.openSettings();
-    }, 500); // Small delay to ensure UI is ready
+    }, 500);
   } else {
     restoreLastUsedSettings();
   }
 }
 
 function restoreLastUsedSettings() {
-  if (!samplerSettingsStore.lastUsed) {
+  if (!appState.samplerSettingsStore.lastUsed) {
     return;
   }
 
-  const lastUsed = samplerSettingsStore.lastUsed;
+  const lastUsed = appState.samplerSettingsStore.lastUsed;
 
-  if (lastUsed.service && samplerSettingsStore.services[lastUsed.service]) {
+  if (
+    lastUsed.service &&
+    appState.samplerSettingsStore.services[lastUsed.service]
+  ) {
     const serviceSelector = document.getElementById("service-selector");
     if (serviceSelector) {
       serviceSelector.value = lastUsed.service;
     }
   }
 
-  if (lastUsed.apiKey && samplerSettingsStore["api-keys"][lastUsed.apiKey]) {
+  if (
+    lastUsed.apiKey &&
+    appState.samplerSettingsStore["api-keys"][lastUsed.apiKey]
+  ) {
     const apiKeySelector = document.getElementById("api-key-selector");
     if (apiKeySelector) {
       apiKeySelector.value = lastUsed.apiKey;
@@ -1499,10 +787,12 @@ function restoreLastUsedSettings() {
 
   const samplerSelector = document.getElementById("sampler-selector");
   if (samplerSelector) {
-    if (lastUsed.sampler && samplerSettingsStore.samplers[lastUsed.sampler]) {
+    if (
+      lastUsed.sampler &&
+      appState.samplerSettingsStore.samplers[lastUsed.sampler]
+    ) {
       samplerSelector.value = lastUsed.sampler;
-    } else if (samplerSettingsStore.samplers["Default"]) {
-      // Auto-select Default sampler if last used doesn't exist
+    } else if (appState.samplerSettingsStore.samplers["Default"]) {
       samplerSelector.value = "Default";
     }
   }
@@ -1513,23 +803,25 @@ function saveCurrentSettings() {
   const apiKeySelector = document.getElementById("api-key-selector");
   const samplerSelector = document.getElementById("sampler-selector");
 
-  if (!samplerSettingsStore.lastUsed) {
-    samplerSettingsStore.lastUsed = {};
+  if (!appState.samplerSettingsStore.lastUsed) {
+    appState.samplerSettingsStore.lastUsed = {};
   }
 
   if (serviceSelector && serviceSelector.value) {
-    samplerSettingsStore.lastUsed.service = serviceSelector.value;
+    appState.samplerSettingsStore.lastUsed.service = serviceSelector.value;
   }
   if (apiKeySelector && apiKeySelector.value) {
-    samplerSettingsStore.lastUsed.apiKey = apiKeySelector.value;
+    appState.samplerSettingsStore.lastUsed.apiKey = apiKeySelector.value;
   }
   if (samplerSelector && samplerSelector.value) {
-    samplerSettingsStore.lastUsed.sampler = samplerSelector.value;
+    appState.samplerSettingsStore.lastUsed.sampler = samplerSelector.value;
   }
 
-  window.electronAPI.saveSettings(samplerSettingsStore).catch(error => {
-    console.error("Failed to save last used settings:", error);
-  });
+  window.electronAPI
+    .saveSettings(appState.samplerSettingsStore)
+    .catch(error => {
+      console.error("Failed to save last used settings:", error);
+    });
 }
 
 function addSettingsChangeListeners() {
@@ -1550,64 +842,47 @@ function addSettingsChangeListeners() {
 
 function populateServiceSelector() {
   const serviceSelector = document.getElementById("service-selector");
-  console.log("Service selector element:", serviceSelector);
   if (!serviceSelector) {
     console.warn("Service selector not found!");
     return;
   }
 
-  // Remember current selection
   const currentSelection = serviceSelector.value;
-  console.log("populateServiceSelector - currentSelection:", currentSelection);
-
-  // Clear existing options except the first one
   serviceSelector.innerHTML =
     '<option value="">-- Select a service --</option>';
 
-  console.log("samplerSettingsStore:", samplerSettingsStore);
-  if (samplerSettingsStore && samplerSettingsStore.services) {
-    const services = Object.keys(samplerSettingsStore.services);
-    console.log("Available services:", services);
+  if (appState.samplerSettingsStore && appState.samplerSettingsStore.services) {
+    const services = Object.keys(appState.samplerSettingsStore.services);
     services.forEach(serviceName => {
       const option = document.createElement("option");
       option.value = serviceName;
       option.textContent = serviceName;
       serviceSelector.appendChild(option);
     });
-  } else {
-    console.log("No services found in settings store");
   }
 
-  // Restore selection if it still exists
   if (
     currentSelection &&
-    samplerSettingsStore &&
-    samplerSettingsStore.services &&
-    samplerSettingsStore.services[currentSelection]
+    appState.samplerSettingsStore &&
+    appState.samplerSettingsStore.services &&
+    appState.samplerSettingsStore.services[currentSelection]
   ) {
     serviceSelector.value = currentSelection;
-    console.log("Restored service selection to:", currentSelection);
-  } else {
-    console.log("Could not restore service selection:", currentSelection);
   }
 }
 
 function populateSamplerSelector() {
   const samplerSelector = document.getElementById("sampler-selector");
-  console.log("Sampler selector element:", samplerSelector);
   if (!samplerSelector) {
     console.warn("Sampler selector not found!");
     return;
   }
 
-  // Remember current selection
   const currentSelection = samplerSelector.value;
-
-  // Clear existing options except the first one
   samplerSelector.innerHTML = "";
 
-  if (samplerSettingsStore && samplerSettingsStore.samplers) {
-    const samplers = Object.keys(samplerSettingsStore.samplers);
+  if (appState.samplerSettingsStore && appState.samplerSettingsStore.samplers) {
+    const samplers = Object.keys(appState.samplerSettingsStore.samplers);
     samplers.forEach(samplerName => {
       const option = document.createElement("option");
       option.value = samplerName;
@@ -1616,40 +891,37 @@ function populateSamplerSelector() {
     });
   }
 
-  // Restore selection if it still exists, or auto-select Default
   if (
     currentSelection &&
-    samplerSettingsStore &&
-    samplerSettingsStore.samplers &&
-    samplerSettingsStore.samplers[currentSelection]
+    appState.samplerSettingsStore &&
+    appState.samplerSettingsStore.samplers &&
+    appState.samplerSettingsStore.samplers[currentSelection]
   ) {
     samplerSelector.value = currentSelection;
   } else if (
-    samplerSettingsStore &&
-    samplerSettingsStore.samplers &&
-    samplerSettingsStore.samplers["Default"]
+    appState.samplerSettingsStore &&
+    appState.samplerSettingsStore.samplers &&
+    appState.samplerSettingsStore.samplers["Default"]
   ) {
-    // Auto-select Default sampler if no selection or selection doesn't exist
     samplerSelector.value = "Default";
   }
 }
 
 function populateApiKeySelector() {
   const apiKeySelector = document.getElementById("api-key-selector");
-  console.log("API key selector element:", apiKeySelector);
   if (!apiKeySelector) {
     console.warn("API key selector not found!");
     return;
   }
 
-  // Remember current selection
   const currentSelection = apiKeySelector.value;
-
-  // Clear existing options except the first one
   apiKeySelector.innerHTML = '<option value="">None</option>';
 
-  if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
-    const apiKeys = Object.keys(samplerSettingsStore["api-keys"]);
+  if (
+    appState.samplerSettingsStore &&
+    appState.samplerSettingsStore["api-keys"]
+  ) {
+    const apiKeys = Object.keys(appState.samplerSettingsStore["api-keys"]);
     apiKeys.forEach(apiKeyName => {
       const option = document.createElement("option");
       option.value = apiKeyName;
@@ -1658,19 +930,18 @@ function populateApiKeySelector() {
     });
   }
 
-  // Restore selection if it still exists
   if (
     currentSelection &&
-    samplerSettingsStore &&
-    samplerSettingsStore["api-keys"] &&
-    samplerSettingsStore["api-keys"][currentSelection]
+    appState.samplerSettingsStore &&
+    appState.samplerSettingsStore["api-keys"] &&
+    appState.samplerSettingsStore["api-keys"][currentSelection]
   ) {
     apiKeySelector.value = currentSelection;
   }
 }
-// Wait for DOM to be ready before initializing
+
+// Initialize when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM loaded, starting initialization...");
   init();
   updateCounterDisplay(editor.value || "");
 });
