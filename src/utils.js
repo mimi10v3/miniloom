@@ -74,25 +74,6 @@ function countWords(text) {
 }
 
 /**
- * Display a temporary success/error message in the footer
- * @param {string} message - The message to display
- * @param {string} type - The message type ('success', 'error', or default)
- */
-function flashSaved(message, type = "success") {
-  const footer = document.getElementById("footer");
-  if (!footer) return;
-
-  footer.textContent = message;
-  footer.className = `footer ${type}`;
-
-  // Clear the message after 3 seconds
-  setTimeout(() => {
-    footer.textContent = "";
-    footer.className = "footer";
-  }, 3000);
-}
-
-/**
  * Simple text highlighting function for search results
  * @param {string} text - The text to highlight
  * @param {string} query - The search query to highlight
@@ -154,7 +135,6 @@ if (typeof module !== "undefined" && module.exports) {
     isValidUrl,
     countCharacters,
     countWords,
-    flashSaved,
     highlightText,
     escapeRegex,
     formatTimestamp,

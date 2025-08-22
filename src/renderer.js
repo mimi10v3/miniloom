@@ -242,6 +242,7 @@ function renderTick() {
   loomTreeView.innerHTML = "";
   renderTree(focus, loomTreeView);
   errorMessage.textContent = "";
+  document.getElementById("errors").classList.remove("has-error");
   updateCounterDisplay(editor.value);
   updateThumbState();
 }
@@ -644,6 +645,9 @@ function diceTeardown() {
   if (die) {
     die.classList.remove("rolling");
   }
+  // Clear any existing errors when generation completes
+  errorMessage.textContent = "";
+  document.getElementById("errors").classList.remove("has-error");
 }
 
 async function delay(ms) {
@@ -821,6 +825,7 @@ async function togetherRoll(id, api = "openai") {
   } catch (error) {
     diceTeardown();
     errorMessage.textContent = "Error: " + error.message;
+    document.getElementById("errors").classList.add("has-error");
     console.warn(error);
     throw error;
   }
@@ -864,11 +869,23 @@ async function openaiChatCompletionsRoll(id) {
   const params = prepareRollParams();
 
   try {
-    // Parse the JSON from the editor
-    let chatData = JSON.parse(promptText);
-
-    if (!chatData.messages || !Array.isArray(chatData.messages)) {
-      throw new Error("Invalid chat format: messages array not found");
+    // Try to parse as JSON first, if it fails, convert regular text to chat format
+    let chatData;
+    try {
+      chatData = JSON.parse(promptText);
+      if (!chatData.messages || !Array.isArray(chatData.messages)) {
+        throw new Error("Invalid chat format: messages array not found");
+      }
+    } catch (jsonError) {
+      // If it's not valid JSON, convert the text to a chat format
+      chatData = {
+        messages: [
+          {
+            role: "user",
+            content: promptText.trim(),
+          },
+        ],
+      };
     }
 
     const apiKey = params["api-key"];
@@ -954,6 +971,7 @@ async function openaiChatCompletionsRoll(id) {
   } catch (error) {
     diceTeardown();
     errorMessage.textContent = "Error: " + error.message;
+    document.getElementById("errors").classList.add("has-error");
     console.error("OpenAI Chat Completions Error:", error);
     return;
   }
@@ -1277,7 +1295,10 @@ async function checkForNewUser() {
     }
 
     // Add default OpenAI service if API key exists
-    if (samplerSettingsStore["api-keys"] && samplerSettingsStore["api-keys"]["OpenAI"]) {
+    if (
+      samplerSettingsStore["api-keys"] &&
+      samplerSettingsStore["api-keys"]["OpenAI"]
+    ) {
       samplerSettingsStore.services["OpenAI Default"] = {
         "sampling-method": "openai",
         "service-api-url": "https://api.openai.com/v1/completions",

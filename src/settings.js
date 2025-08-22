@@ -58,6 +58,25 @@ let originalServiceData = null;
 let originalSamplerData = null;
 let activeTab = "services";
 
+/**
+ * Display a temporary success/error message in the footer
+ * @param {string} message - The message to display
+ * @param {string} type - The message type ('success', 'error', or default)
+ */
+function flashSaved(message, type = "success") {
+  const footer = document.getElementById("footer");
+  if (!footer) return;
+
+  footer.textContent = message;
+  footer.className = `footer ${type}`;
+
+  // Clear the message after 3 seconds
+  setTimeout(() => {
+    footer.textContent = "";
+    footer.className = "footer";
+  }, 3000);
+}
+
 function applyServiceDefaults(serviceType) {
   const defaults = SERVICE_DEFAULTS[serviceType] || SERVICE_DEFAULTS.base;
   return defaults;

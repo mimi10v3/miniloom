@@ -418,6 +418,7 @@
         position: relative;
         z-index: 10;
         margin-right: 8px;
+        flex-shrink: 0;
       }
 
       #die.rolling {
@@ -641,8 +642,30 @@
 
       /* end tree styling */
 
+      #errors {
+        margin: 0;
+        padding: 0;
+        height: 0;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border-top: none;
+        background-color: #fff5f5;
+      }
+
+      #errors.has-error {
+        margin: 8px 0;
+        padding: 12px 16px;
+        height: auto;
+        border-top: 2px solid #dc3545;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.1);
+      }
+
       #error-message {
-        color: red;
+        color: #dc3545;
+        font-size: 14px;
+        font-weight: 500;
+        margin: 0;
+        line-height: 1.4;
       }
 
       .search-result-item {
@@ -880,7 +903,6 @@
               <span class="app-title">MiniHF MiniLoom</span>
             </div>
             <div class="file-info">
-              <div id="die">🎲</div>
               <span id="current-filename">Untitled</span>
               <span
                 id="unsaved-indicator"
@@ -941,6 +963,7 @@
               id="generate-button-container"
               class="generate-button-container"
             >
+              <div id="die">🎲</div>
               <span id="generate-button" class="reroll"
                 >🖋️ <span>Generate</span></span
               >
