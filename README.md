@@ -1,56 +1,17 @@
-<p align="center">
+<p align="center" style="font-size:48px;>
   <img src="assets/minihf_logo_no_text.png" alt="vector art logo of the brain patterned in the style of a pictorial history of Portuguese textiles, painted in the 1700s" width="50" height="50">
-  **MiniLoom**
+  MiniLoom
 </p>
 
-MiniLoom is an AI text generation tool built with Electron, providing a desktop application for text generation and manipulation.
+MiniLoom is a desktop application for AI text generation.
 
 ## Features
 
 - Desktop application with native UI
-- Text generation capabilities
+- Text generation capabilities from a variety of LLM APIs
 - File save/load functionality
 - Settings management
-- Search functionality
-
-## Prerequisites
-
-- Node.js (version 14 or higher)
-- npm (comes with Node.js)
-
-## Installation
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/JD-P/miniloom.git
-cd miniloom
-```
-
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-## Usage
-
-To start the application:
-
-```bash
-npm start
-```
-
-This will launch the MiniLoom desktop application.
-
-## Development
-
-The application is built with:
-
-- Electron for the desktop framework
-- Vanilla JavaScript for the frontend
-- MiniSearch for search functionality
-- Diff-match-patch for text comparison
+- Text search functionality
 
 ## Getting Started
 
@@ -95,6 +56,44 @@ When you first open MiniLoom, the app will automatically detect that you're a ne
    - Use the tree view on the left to navigate between different generations
    - Click on any node to focus on it and continue from that point
    - Use thumbs up/down to rate responses
+
+## Prerequisites
+
+- Node.js / npm (version 14 or higher)
+
+## Installation
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/JD-P/miniloom.git
+cd miniloom
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+## Usage
+
+To start the application:
+
+```bash
+npm start
+```
+
+This will launch the MiniLoom desktop application.
+
+## Development
+
+The application is built with:
+
+- Electron for the desktop framework
+- Vanilla JavaScript for the frontend
+- MiniSearch for search functionality
+- Diff-match-patch for text comparison
 
 ## License
 
