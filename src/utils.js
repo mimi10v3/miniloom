@@ -16,7 +16,8 @@ function validateFieldStringType(fieldValue, fieldType) {
   } else if (fieldType === "floatType") {
     result = fieldValueString.match(floatPattern);
   } else if (fieldType === "modelNameType") {
-    result = fieldValueString.match(modelNamePattern);
+    result =
+      fieldValueString.match(modelNamePattern) && fieldValueString.length <= 20;
   } else if (fieldType === "settingsNameType") {
     result = fieldValueString.match(modelNamePattern);
   } else if (fieldType === "URLType") {

@@ -56,6 +56,7 @@ let currentEditingService = null;
 let currentEditingSampler = null;
 let originalServiceData = null;
 let originalSamplerData = null;
+let activeTab = "services";
 
 function applyServiceDefaults(serviceType) {
   const defaults = SERVICE_DEFAULTS[serviceType] || SERVICE_DEFAULTS.base;
@@ -156,7 +157,9 @@ function saveService() {
   const delay = document.getElementById("service-api-delay").value.trim();
 
   if (!validateFieldStringType(name, "modelNameType")) {
-    alert("Invalid service name. Use letters, digits, '-', '_', or '.'.");
+    alert(
+      "Invalid service name. Use letters, digits, '-', '_', or '.' (max 20 characters)."
+    );
     return;
   }
 
@@ -319,7 +322,9 @@ function saveSampler() {
   const penalty = document.getElementById("repetition-penalty").value.trim();
 
   if (!validateFieldStringType(name, "modelNameType")) {
-    alert("Invalid sampler name. Use letters, digits, '-', '_', or '.'.");
+    alert(
+      "Invalid sampler name. Use letters, digits, '-', '_', or '.' (max 20 characters)."
+    );
     return;
   }
 
@@ -369,12 +374,23 @@ function saveSampler() {
 function deleteSampler() {
   if (!currentEditingSampler) return;
 
+  const samplers = getSamplersObject();
+  const samplerCount = Object.keys(samplers).length;
+
+  // Prevent deleting the last sampler
+  if (samplerCount <= 1) {
+    flashSaved(
+      "Cannot delete the last sampler. At least one sampler is required.",
+      "error"
+    );
+    return;
+  }
+
   if (
     confirm(
       `Are you sure you want to delete the sampler "${currentEditingSampler}"?`
     )
   ) {
-    const samplers = getSamplersObject();
     delete samplers[currentEditingSampler];
     persistStore();
     populateSamplerSelect();
@@ -619,13 +635,15 @@ document.addEventListener("DOMContentLoaded", function () {
   const addKeyBtn = document.getElementById("add-key-btn");
   if (addKeyBtn) {
     addKeyBtn.addEventListener("click", async () => {
-      const nameEl = document.getElementById("key-label");
+      const nameEl = document.getElementById("key-name");
       const valEl = document.getElementById("key-value");
       const name = nameEl.value.trim();
       const value = valEl.value;
 
       if (!validateFieldStringType(name, "modelNameType")) {
-        alert("Invalid key name. Use letters, digits, '-', '_', or '.'.");
+        alert(
+          "Invalid key name. Use letters, digits, '-', '_', or '.' (max 20 characters)."
+        );
         return;
       }
       if (!value) {
@@ -661,6 +679,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Initialize
   loadSettings().then(() => {
     setActiveTab("services"); // Set initial active tab with loaded data
+
+    // Check if this is a new user (no services configured)
+    checkForNewUserInSettings();
   });
 
   // Close button handler
@@ -671,3 +692,24 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 });
+
+// Check if user is new and show welcome message
+function checkForNewUserInSettings() {
+  const hasServices =
+    samplerSettingsStore &&
+    samplerSettingsStore.services &&
+    Object.keys(samplerSettingsStore.services).length > 0;
+
+  if (!hasServices) {
+    const welcomeMessage = document.getElementById("welcome-message");
+    if (welcomeMessage) {
+      welcomeMessage.style.display = "block";
+    }
+
+    // Automatically open the "Add New" form for services
+    setTimeout(() => {
+      showServiceForm(true);
+      populateServiceForm();
+    }, 100);
+  }
+}

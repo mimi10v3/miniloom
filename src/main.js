@@ -103,15 +103,15 @@ function createWindow() {
   });
 }
 
-function openSettingsWindow() {
+function openSettingsWindow(tabName = null) {
   const modal = new BrowserWindow({
     parent: mainWindow,
     modal: true,
     show: false,
-    width: 1000,
+    width: 900,
     height: 700,
-    minWidth: 800,
-    minHeight: 500,
+    minWidth: 600,
+    minHeight: 400,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -123,7 +123,13 @@ function openSettingsWindow() {
   });
 
   modal.loadFile("src/settings.html");
-  modal.once("ready-to-show", () => modal.show());
+  modal.once("ready-to-show", () => {
+    modal.show();
+    // Send the tab name to the settings window if provided
+    if (tabName) {
+      modal.webContents.send("open-to-tab", tabName);
+    }
+  });
 
   modal.on("closed", () => {
     // Inform the main window to refresh its UI
@@ -132,7 +138,12 @@ function openSettingsWindow() {
 }
 
 // Listen for open-settings request
-ipcMain.handle("open-settings", openSettingsWindow);
+ipcMain.handle("open-settings", () => openSettingsWindow());
+
+// Listen for open-settings-to-tab request
+ipcMain.handle("open-settings-to-tab", (event, tabName) =>
+  openSettingsWindow(tabName)
+);
 
 // Listen for close-settings-window request
 ipcMain.on("close-settings-window", event => {

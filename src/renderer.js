@@ -199,6 +199,13 @@ const loomTreeView = document.getElementById("loom-tree-view");
 let focus = loomTree.nodeStore["1"];
 renderTree(loomTree.root, loomTreeView);
 
+// Initialize focused node title
+const focusedNodeTitle = document.getElementById("focused-node-title");
+if (focusedNodeTitle) {
+  const title = (focus.summary || "").trim() || "Untitled Node";
+  focusedNodeTitle.textContent = title;
+}
+
 function renderTick() {
   editor.value = "";
   var next = focus;
@@ -218,6 +225,13 @@ function renderTick() {
 
   const batchIndexMarker = document.getElementById("batch-item-index");
   batchIndexMarker.textContent = `${selection + 1}/${batchLimit + 1}`;
+
+  // Update focused node title
+  const focusedNodeTitle = document.getElementById("focused-node-title");
+  if (focusedNodeTitle) {
+    const title = (focus.summary || "").trim() || "Untitled Node";
+    focusedNodeTitle.textContent = title;
+  }
 
   const generateButton = document.getElementById("generate-button");
   if (generateButton) {
@@ -239,6 +253,12 @@ function changeFocus(newFocusId) {
     loomTreeView.innerHTML = "";
     renderTree(focus, loomTreeView);
     updateThumbState();
+    // Update focused node title even when not calling renderTick
+    const focusedNodeTitle = document.getElementById("focused-node-title");
+    if (focusedNodeTitle) {
+      const title = (focus.summary || "").trim() || "Untitled Node";
+      focusedNodeTitle.textContent = title;
+    }
   } else {
     renderTick();
     editor.selectionStart = editor.value.length;
@@ -1188,6 +1208,9 @@ async function init() {
     populateSamplerSelector();
     populateApiKeySelector();
 
+    // Add change listeners to save settings automatically
+    addSettingsChangeListeners();
+
     // Add click handlers to thumbs
     const thumbUp = document.getElementById("thumb-up");
     const thumbDown = document.getElementById("thumb-down");
@@ -1199,13 +1222,175 @@ async function init() {
       thumbDown.onclick = () => promptThumbsDown(focus.id);
     }
 
+    // Add click handlers to emoji labels in bottom bar
+    const serviceLabel = document.querySelector(
+      '.control-group label[title="Service"]'
+    );
+    const apiKeyLabel = document.querySelector(
+      '.control-group label[title="API Key"]'
+    );
+    const samplerLabel = document.querySelector(
+      '.control-group label[title="Sampler"]'
+    );
+
+    if (serviceLabel) {
+      serviceLabel.style.cursor = "pointer";
+      serviceLabel.onclick = () =>
+        window.electronAPI.openSettingsToTab("services");
+    }
+    if (apiKeyLabel) {
+      apiKeyLabel.style.cursor = "pointer";
+      apiKeyLabel.onclick = () =>
+        window.electronAPI.openSettingsToTab("api-keys");
+    }
+    if (samplerLabel) {
+      samplerLabel.style.cursor = "pointer";
+      samplerLabel.onclick = () =>
+        window.electronAPI.openSettingsToTab("samplers");
+    }
+
     renderTick();
 
     // Update initial thumb state
     updateThumbState();
+
+    // Check if this is a new user (no services configured)
+    checkForNewUser();
+
     console.log("Initialization complete");
   } catch (error) {
     console.error("Initialization failed:", error);
+  }
+}
+
+// Check if user is new and needs initial setup
+async function checkForNewUser() {
+  const hasServices =
+    samplerSettingsStore &&
+    samplerSettingsStore.services &&
+    Object.keys(samplerSettingsStore.services).length > 0;
+
+  if (!hasServices) {
+    // Auto-create default services if none exist
+    if (!samplerSettingsStore.services) {
+      samplerSettingsStore.services = {};
+    }
+
+    // Add default OpenAI service if API key exists
+    if (samplerSettingsStore["api-keys"] && samplerSettingsStore["api-keys"]["OpenAI"]) {
+      samplerSettingsStore.services["OpenAI Default"] = {
+        "sampling-method": "openai",
+        "service-api-url": "https://api.openai.com/v1/completions",
+        "service-model-name": "gpt-3.5-turbo-instruct",
+        "service-api-delay": "3000",
+      };
+    }
+
+    // Auto-create default sampler if none exist
+    if (
+      !samplerSettingsStore.samplers ||
+      Object.keys(samplerSettingsStore.samplers).length === 0
+    ) {
+      if (!samplerSettingsStore.samplers) {
+        samplerSettingsStore.samplers = {};
+      }
+
+      samplerSettingsStore.samplers["Default"] = {
+        "output-branches": "2",
+        "tokens-per-branch": "256",
+        temperature: "0.9",
+        "top-p": "1",
+        "top-k": "100",
+        "repetition-penalty": "1",
+      };
+    }
+
+    try {
+      await window.electronAPI.saveSettings(samplerSettingsStore);
+      populateServiceSelector();
+      populateSamplerSelector();
+    } catch (error) {
+      console.error("Failed to save default settings:", error);
+    }
+
+    // Auto-open settings for new user
+    setTimeout(() => {
+      window.electronAPI.openSettings();
+    }, 500); // Small delay to ensure UI is ready
+  } else {
+    restoreLastUsedSettings();
+  }
+}
+
+function restoreLastUsedSettings() {
+  if (!samplerSettingsStore.lastUsed) {
+    return;
+  }
+
+  const lastUsed = samplerSettingsStore.lastUsed;
+
+  if (lastUsed.service && samplerSettingsStore.services[lastUsed.service]) {
+    const serviceSelector = document.getElementById("service-selector");
+    if (serviceSelector) {
+      serviceSelector.value = lastUsed.service;
+    }
+  }
+
+  if (lastUsed.apiKey && samplerSettingsStore["api-keys"][lastUsed.apiKey]) {
+    const apiKeySelector = document.getElementById("api-key-selector");
+    if (apiKeySelector) {
+      apiKeySelector.value = lastUsed.apiKey;
+    }
+  }
+
+  const samplerSelector = document.getElementById("sampler-selector");
+  if (samplerSelector) {
+    if (lastUsed.sampler && samplerSettingsStore.samplers[lastUsed.sampler]) {
+      samplerSelector.value = lastUsed.sampler;
+    } else if (samplerSettingsStore.samplers["Default"]) {
+      // Auto-select Default sampler if last used doesn't exist
+      samplerSelector.value = "Default";
+    }
+  }
+}
+
+function saveCurrentSettings() {
+  const serviceSelector = document.getElementById("service-selector");
+  const apiKeySelector = document.getElementById("api-key-selector");
+  const samplerSelector = document.getElementById("sampler-selector");
+
+  if (!samplerSettingsStore.lastUsed) {
+    samplerSettingsStore.lastUsed = {};
+  }
+
+  if (serviceSelector && serviceSelector.value) {
+    samplerSettingsStore.lastUsed.service = serviceSelector.value;
+  }
+  if (apiKeySelector && apiKeySelector.value) {
+    samplerSettingsStore.lastUsed.apiKey = apiKeySelector.value;
+  }
+  if (samplerSelector && samplerSelector.value) {
+    samplerSettingsStore.lastUsed.sampler = samplerSelector.value;
+  }
+
+  window.electronAPI.saveSettings(samplerSettingsStore).catch(error => {
+    console.error("Failed to save last used settings:", error);
+  });
+}
+
+function addSettingsChangeListeners() {
+  const serviceSelector = document.getElementById("service-selector");
+  const apiKeySelector = document.getElementById("api-key-selector");
+  const samplerSelector = document.getElementById("sampler-selector");
+
+  if (serviceSelector) {
+    serviceSelector.addEventListener("change", saveCurrentSettings);
+  }
+  if (apiKeySelector) {
+    apiKeySelector.addEventListener("change", saveCurrentSettings);
+  }
+  if (samplerSelector) {
+    samplerSelector.addEventListener("change", saveCurrentSettings);
   }
 }
 
@@ -1265,8 +1450,7 @@ function populateSamplerSelector() {
   const currentSelection = samplerSelector.value;
 
   // Clear existing options except the first one
-  samplerSelector.innerHTML =
-    '<option value="">-- Select a sampler --</option>';
+  samplerSelector.innerHTML = "";
 
   if (samplerSettingsStore && samplerSettingsStore.samplers) {
     const samplers = Object.keys(samplerSettingsStore.samplers);
@@ -1278,7 +1462,7 @@ function populateSamplerSelector() {
     });
   }
 
-  // Restore selection if it still exists
+  // Restore selection if it still exists, or auto-select Default
   if (
     currentSelection &&
     samplerSettingsStore &&
@@ -1286,6 +1470,13 @@ function populateSamplerSelector() {
     samplerSettingsStore.samplers[currentSelection]
   ) {
     samplerSelector.value = currentSelection;
+  } else if (
+    samplerSettingsStore &&
+    samplerSettingsStore.samplers &&
+    samplerSettingsStore.samplers["Default"]
+  ) {
+    // Auto-select Default sampler if no selection or selection doesn't exist
+    samplerSelector.value = "Default";
   }
 }
 
@@ -1301,7 +1492,7 @@ function populateApiKeySelector() {
   const currentSelection = apiKeySelector.value;
 
   // Clear existing options except the first one
-  apiKeySelector.innerHTML = '<option value="">-- Select API key --</option>';
+  apiKeySelector.innerHTML = '<option value="">None</option>';
 
   if (samplerSettingsStore && samplerSettingsStore["api-keys"]) {
     const apiKeys = Object.keys(samplerSettingsStore["api-keys"]);

@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   loadSettings: () => ipcRenderer.invoke("load-settings"),
   saveSettings: settings => ipcRenderer.invoke("save-settings", settings),
   openSettings: () => ipcRenderer.invoke("open-settings"),
+  openSettingsToTab: tabName =>
+    ipcRenderer.invoke("open-settings-to-tab", tabName),
   closeSettingsWindow: () => ipcRenderer.send("close-settings-window"),
 
   // Read prompt files (needed for AI operations)
@@ -28,6 +30,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onSettingsUpdated: callback => {
     ipcRenderer.on("settings-updated", callback);
     return () => ipcRenderer.removeAllListeners("settings-updated");
+  },
+  onOpenToTab: callback => {
+    ipcRenderer.on("open-to-tab", callback);
+    return () => ipcRenderer.removeAllListeners("open-to-tab");
   },
 
   onUpdateFilename: callback => {
