@@ -393,10 +393,7 @@ editor.addEventListener("keydown", async e => {
 
   // Generate on Ctrl/Cmd+Enter
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-    llmService.reroll(
-      appState.focusedNode.id,
-      settingUseWeave?.checked ?? true
-    );
+    llmService.reroll(appState.focusedNode.id);
   }
 });
 
@@ -547,6 +544,38 @@ async function init() {
       setEditorReadOnly: readOnly => {
         editor.readOnly = readOnly;
       },
+      // Configuration callbacks
+      getSamplerSettings: () => {
+        const serviceSelector = document.getElementById("service-selector");
+        const samplerSelector = document.getElementById("sampler-selector");
+        const apiKeySelector = document.getElementById("api-key-selector");
+
+        return {
+          selectedServiceName: serviceSelector?.value || "",
+          selectedSamplerName: samplerSelector?.value || "",
+          selectedApiKeyName: apiKeySelector?.value || "",
+        };
+      },
+      // UI state management callbacks
+      setLoading: function (isLoading) {
+        editor.readOnly = isLoading;
+        const die = document.getElementById("die");
+        if (die) {
+          die.classList.toggle("rolling", isLoading);
+        }
+        if (!isLoading) {
+          this.clearErrors();
+        }
+      },
+      showError: message => {
+        errorMessage.textContent = `Error: ${message}`;
+        document.getElementById("errors").classList.add("has-error");
+        console.error(message);
+      },
+      clearErrors: () => {
+        errorMessage.textContent = "";
+        document.getElementById("errors").classList.remove("has-error");
+      },
     });
 
     treeNav = new TreeNav(
@@ -602,13 +631,9 @@ async function init() {
 }
 
 function setupEventHandlers() {
-  // Generate button
   if (generateButton) {
-    generateButton.onclick = () =>
-      llmService.reroll(appState.focusedNode.id, false);
+    generateButton.onclick = () => llmService.reroll(appState.focusedNode.id);
   }
-
-  // Thumb buttons
   if (thumbUp) {
     thumbUp.onclick = handleThumbsUp;
   }
@@ -643,7 +668,6 @@ function setupEventHandlers() {
       window.electronAPI.openSettingsToTab("samplers");
   }
 
-  // Context menu
   editor.addEventListener("contextmenu", e => {
     e.preventDefault();
     window.electronAPI.showContextMenu();
@@ -764,7 +788,6 @@ function restoreLastUsedSettings() {
   }
 
   const lastUsed = appState.samplerSettingsStore.lastUsed;
-
   if (
     lastUsed.service &&
     appState.samplerSettingsStore.services[lastUsed.service]

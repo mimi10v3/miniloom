@@ -1,51 +1,161 @@
+// Utility functions for API handling
+class APIUtils {
+  static async makeRequest(url, options) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+        ...options.headers,
+      },
+      body: JSON.stringify(options.body),
+    });
+
+    if (!response.ok) {
+      const errorMessage = await this.extractErrorMessage(response);
+      throw new Error(`API Error: ${errorMessage}`);
+    }
+
+    try {
+      return await response.json();
+    } catch (jsonError) {
+      throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
+    }
+  }
+
+  static async extractErrorMessage(response) {
+    try {
+      const errorData = await response.json();
+      return errorData.error?.message || response.statusText;
+    } catch (jsonError) {
+      try {
+        const errorText = await response.text();
+        return errorText || response.statusText;
+      } catch (textError) {
+        return response.statusText;
+      }
+    }
+  }
+
+  static delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  static extractThreeWords(text) {
+    return text.trim().split("\n")[0].split(" ").slice(0, 3).join(" ");
+  }
+}
+
+// API providers for different services
+class APIProviders {
+  static async baseProvider(endpoint, prompt, params) {
+    return APIUtils.makeRequest(endpoint + "generate", {
+      body: {
+        prompt: prompt,
+        prompt_node: true,
+        evaluationPrompt: "",
+        tokens_per_branch: params["tokens-per-branch"],
+        output_branches: params["output-branches"],
+      },
+    });
+  }
+
+  static async openaiChatProvider(endpoint, prompt, params) {
+    const headers = {
+      Authorization: `Bearer ${params["api-key"]}`,
+    };
+    const requestBody = {
+      messages: [{ role: "system", content: prompt }],
+      model: params["model-name"],
+      max_tokens: params["tokens-per-branch"],
+      temperature: params["temperature"],
+      top_p: params["top-p"],
+      top_k: params["top-k"],
+      repetition_penalty: params["repetition-penalty"],
+    };
+
+    return APIUtils.makeRequest(endpoint, {
+      headers,
+      body: requestBody,
+    });
+  }
+
+  static async togetherProvider(endpoint, prompt, params, api = "openai") {
+    const auth_token = `Bearer ${params["api-key"]}`;
+    const apiDelay = Number(params["delay"] || 0);
+
+    const batchPromises = [];
+    const calls = api === "openai" ? 1 : params["output-branches"];
+
+    for (let i = 1; i <= calls; i++) {
+      const body = {
+        model: params["model-name"],
+        prompt: prompt,
+        max_tokens: Number(params["tokens-per-branch"]),
+        n: api === "openai" ? Number(params["output-branches"]) : 1,
+        temperature: Number(params["temperature"]),
+        top_p: Number(params["top-p"]),
+        top_k: Number(params["top-k"]),
+        repetition_penalty: Number(params["repetition-penalty"]),
+      };
+
+      if (api === "openrouter") {
+        body.provider = { require_parameters: true };
+      }
+
+      const promise = APIUtils.delay(apiDelay * i)
+        .then(() =>
+          APIUtils.makeRequest(endpoint, {
+            headers: {
+              accept: "application/json",
+              Authorization: auth_token,
+            },
+            body,
+          })
+        )
+        .then(responseJson => {
+          const choices =
+            api === "openai" || api === "openrouter"
+              ? responseJson.choices
+              : responseJson.output.choices;
+
+          return choices.map(choice => ({
+            text: choice.text,
+            model: responseJson.model,
+          }));
+        });
+
+      batchPromises.push(promise);
+    }
+
+    const batch = await Promise.all(batchPromises);
+    // For OpenAI, batch[0] is an array of choices, so we return it directly
+    // For other APIs, batch is an array of arrays, so we flatten it
+    return api === "openai" ? batch[0] : batch.flat();
+  }
+}
+
+// Main LLM Service class
 class LLMService {
   constructor(callbacks = {}) {
-    this.errorMessage = document.getElementById("error-message");
     this.callbacks = callbacks;
   }
 
   prepareRollParams() {
-    const serviceSelector = document.getElementById("service-selector");
-    const samplerSelector = document.getElementById("sampler-selector");
-    const apiKeySelector = document.getElementById("api-key-selector");
-
-    // Get selected service, sampler, and API key
-    const selectedServiceName = serviceSelector ? serviceSelector.value : "";
-    const selectedSamplerName = samplerSelector ? samplerSelector.value : "";
-    const selectedApiKeyName = apiKeySelector ? apiKeySelector.value : "";
-
-    // Get service data
-    let serviceData = {};
+    const settings = this.callbacks.getSamplerSettings();
     const samplerSettingsStore = this.callbacks.getSamplerSettingsStore();
-    if (
-      selectedServiceName &&
-      samplerSettingsStore &&
-      samplerSettingsStore.services
-    ) {
-      serviceData = samplerSettingsStore.services[selectedServiceName] || {};
+
+    if (!samplerSettingsStore) {
+      throw new Error("Sampler settings store not available");
     }
 
-    // Get sampler data
-    let samplerData = {};
-    if (
-      selectedSamplerName &&
-      samplerSettingsStore &&
-      samplerSettingsStore.samplers
-    ) {
-      samplerData = samplerSettingsStore.samplers[selectedSamplerName] || {};
-    }
+    const serviceData =
+      samplerSettingsStore.services?.[settings.selectedServiceName] || {};
+    const samplerData =
+      samplerSettingsStore.samplers?.[settings.selectedSamplerName] || {};
+    const apiKey =
+      samplerSettingsStore["api-keys"]?.[settings.selectedApiKeyName] || "";
 
-    // Get API key
-    let apiKey = "";
-    if (
-      selectedApiKeyName &&
-      samplerSettingsStore &&
-      samplerSettingsStore["api-keys"]
-    ) {
-      apiKey = samplerSettingsStore["api-keys"][selectedApiKeyName] || "";
-    }
-
-    const params = {
+    return {
       // Service parameters
       "sampling-method": serviceData["sampling-method"] || "base",
       "api-url": serviceData["service-api-url"] || "",
@@ -61,8 +171,6 @@ class LLMService {
       "top-k": parseInt(samplerData["top-k"]) || 100,
       "repetition-penalty": parseFloat(samplerData["repetition-penalty"]) || 1,
     };
-
-    return params;
   }
 
   async getResponses(
@@ -75,34 +183,29 @@ class LLMService {
       includePrompt = false,
     }
   ) {
-    let wp = weaveParams;
     if (focusId) {
       const loomTree = this.callbacks.getLoomTree();
       loomTree.renderNode(loomTree.nodeStore[focusId]);
     }
-    if (weave) {
-      endpoint = endpoint + "weave";
-    } else {
-      endpoint = endpoint + "generate";
-    }
 
-    r = await fetch(endpoint, {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: prompt,
-        prompt_node: includePrompt,
-        tokens_per_branch: wp["tokens_per_branch"],
-        output_branches: wp["output_branches"],
-      }),
-      headers: {
-        "Content-type": "application/json; charset=UTF-8",
-      },
-    });
-    batch = await r.json();
-    return batch;
+    const finalEndpoint = endpoint + (weave ? "weave" : "generate");
+    const params = {
+      prompt: prompt,
+      prompt_node: includePrompt,
+      tokens_per_branch: weaveParams["tokens_per_branch"],
+      output_branches: weaveParams["output_branches"],
+    };
+
+    return APIUtils.makeRequest(finalEndpoint, { body: params });
   }
 
   async getSummary(taskText) {
+    // Safety check for undefined or null taskText
+    if (!taskText || typeof taskText !== "string") {
+      console.warn("getSummary called with invalid taskText:", taskText);
+      return "Summary Not Available";
+    }
+
     const params = this.prepareRollParams();
     const endpoint = params["api-url"];
 
@@ -112,669 +215,293 @@ class LLMService {
       "{MODEL_NAME}",
       params["model-name"]
     );
-    // Limit context to 8 * 512, where eight is the average number of letters in a word
-    // and 512 is the number of words to summarize over
-    // otherwise we eventually end up pushing the few shot prompt out of the context window
+
+    // Limit context to 8 * 512 characters (average word length * word count)
     const prompt =
       summarizePrompt +
-      "\n\n" +
-      "<tasktext>\n" +
+      "\n\n<tasktext>\n" +
       taskText.slice(-4096) +
       "\n</tasktext>\n\nThree Words:";
-    // TODO: Flip this case around
+
+    const samplingMethod = params["sampling-method"];
+
     if (
-      !["together", "openrouter", "openai", "openai-chat"].includes(
-        params["sampling-method"]
+      ["together", "openrouter", "openai", "openai-chat"].includes(
+        samplingMethod
       )
     ) {
-      r = await fetch(endpoint + "generate", {
-        method: "POST",
-        body: JSON.stringify({
-          prompt: prompt,
-          prompt_node: true,
-          evaluationPrompt: "",
-          tokens_per_branch: 10,
-          output_branches: 1,
-        }),
-        headers: {
-          "Content-type": "application/json; charset=UTF-8",
-        },
-      });
-      let batch = await r.json();
-      // Always get last three words
-      return batch[1]["text"]
-        .trim()
-        .split("\n")[0]
-        .split(" ")
-        .slice(0, 3)
-        .join(" ");
-    } // TODO: Figure out how I might have to change this if I end up supporting
-    // multiple APIs
-    else if (params["sampling-method"] == "openai-chat") {
-      // Check if this is Anthropic API
-      const isAnthropic = endpoint.includes("api.anthropic.com");
+      if (samplingMethod === "openai-chat") {
+        const response = await APIProviders.openaiChatProvider(
+          endpoint,
+          prompt,
+          {
+            ...params,
+            "tokens-per-branch": 10,
+            "output-branches": 1,
+          }
+        );
 
-      let requestUrl = endpoint;
-      let headers = {
-        "Content-type": "application/json; charset=UTF-8",
-      };
-      let requestBody;
-
-      if (isAnthropic) {
-        // Anthropic API format
-        requestUrl = "https://api.anthropic.com/v1/messages";
-        headers["x-api-key"] = params["api-key"];
-        headers["anthropic-version"] = "2023-06-01";
-
-        requestBody = {
-          model: params["model-name"],
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 10,
-          temperature: params["temperature"],
-          top_p: params["top-p"],
-        };
+        const text = response.choices[0].message.content;
+        return APIUtils.extractThreeWords(text);
       } else {
-        // OpenAI format
-        headers.Authorization = `Bearer ${params["api-key"]}`;
-
-        requestBody = {
-          messages: [{ role: "system", content: prompt }],
-          model: params["model-name"],
-          max_tokens: 10,
+        const togetherParams = {
+          "api-key": params["api-key"],
+          "output-branches": 1,
+          "model-name": params["model-name"],
+          "tokens-per-branch": 10,
           temperature: params["temperature"],
-          top_p: params["top-p"],
-          top_k: params["top-k"],
+          "top-p": params["top-p"],
+          "top-k": params["top-k"],
           repetition_penalty: params["repetition-penalty"],
         };
-      }
 
-      r = await fetch(requestUrl, {
-        method: "POST",
-        body: JSON.stringify(requestBody),
-        headers: headers,
-      });
+        const batch = await APIProviders.togetherProvider(
+          endpoint,
+          prompt,
+          togetherParams,
+          samplingMethod === "openai" ? "openai" : samplingMethod
+        );
 
-      if (!r.ok) {
-        let errorMessage = r.statusText;
-        try {
-          const errorData = await r.json();
-          errorMessage = errorData.error?.message || errorMessage;
-        } catch (jsonError) {
-          try {
-            const errorText = await r.text();
-            errorMessage = errorText || errorMessage;
-          } catch (textError) {
-            errorMessage = r.statusText;
-          }
-        }
-        throw new Error(`API Error: ${errorMessage}`);
-      }
-
-      let batch;
-      try {
-        batch = await r.json();
-      } catch (jsonError) {
-        throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
-      }
-
-      if (isAnthropic) {
-        return batch.content[0].text
-          .trim()
-          .split("\n")[0]
-          .split(" ")
-          .slice(0, 3)
-          .join(" ");
-      } else {
-        return batch.choices[0]["message"]["content"]
-          .trim()
-          .split("\n")[0]
-          .split(" ")
-          .slice(0, 3)
-          .join(" ");
+        return APIUtils.extractThreeWords(batch[0].text);
       }
     } else {
-      const tp = {
-        "api-key": params["api-key"],
-        "output-branches": 1,
-        "model-name": params["model-name"],
+      const response = await APIProviders.baseProvider(endpoint, prompt, {
         "tokens-per-branch": 10,
+        "output-branches": 1,
+      });
+
+      return APIUtils.extractThreeWords(response[1].text);
+    }
+  }
+
+  async reroll(id) {
+    const params = this.prepareRollParams();
+    const samplingMethod = params["sampling-method"];
+
+    const methodMap = {
+      base: () => this.togetherRoll(id, "base"),
+      "vae-guided": () => this.togetherRoll(id, "base"), // fallback to base
+      together: () => this.togetherRoll(id, "together"),
+      openrouter: () => this.togetherRoll(id, "openrouter"),
+      openai: () => this.togetherRoll(id, "openai"),
+      "openai-chat": () => this.openaiChatCompletionsRoll(id),
+    };
+
+    const method = methodMap[samplingMethod] || methodMap["base"];
+    await method();
+  }
+
+  async togetherRoll(id, api = "openai") {
+    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
+
+    try {
+      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
+      if (this.callbacks.updateFocusSummary)
+        await this.callbacks.updateFocusSummary();
+
+      const loomTree = this.callbacks.getLoomTree();
+      const rollFocus = loomTree.nodeStore[id];
+      const lastChildIndex =
+        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
+
+      const prompt = this.callbacks.getEditor().value;
+      const params = this.prepareRollParams();
+
+      const togetherParams = {
+        "api-key": params["api-key"],
+        "model-name": params["model-name"],
+        "output-branches": params["output-branches"],
+        "tokens-per-branch": params["tokens-per-branch"],
         temperature: params["temperature"],
         "top-p": params["top-p"],
         "top-k": params["top-k"],
         repetition_penalty: params["repetition-penalty"],
+        delay: params["api-delay"],
       };
-      let batch;
-      if (params["sampling-method"] === "openai") {
-        batch = await this.togetherGetResponses({
-          endpoint: endpoint,
-          prompt: prompt,
-          togetherParams: tp,
-          openai: true,
-        });
-      } else {
-        batch = await this.togetherGetResponses({
-          endpoint: endpoint,
-          prompt: prompt,
-          togetherParams: tp,
-        });
-      }
-      return batch[0]["text"]
-        .trim()
-        .split("\n")[0]
-        .split(" ")
-        .slice(0, 3)
-        .join(" ");
-    }
-  }
 
-  async togetherGetResponses({
-    endpoint,
-    prompt,
-    togetherParams = {},
-    api = "openai",
-  }) {
-    const tp = togetherParams;
-    const auth_token = "Bearer " + tp["api-key"];
-    const apiDelay = Number(tp["delay"]);
+      const newResponses = await APIProviders.togetherProvider(
+        params["api-url"],
+        prompt,
+        togetherParams,
+        api
+      );
 
-    let batch_promises = [];
-    // Together doesn't let you get more than one completion at a time
-    // But OpenAI expects you to use the n parameter
-    let calls = api === "openai" ? 1 : tp["output-branches"];
-    for (let i = 1; i <= calls; i++) {
-      const body = {
-        model: tp["model-name"],
-        prompt: prompt,
-        max_tokens: Number(tp["tokens-per-branch"]),
-        n: api === "openai" ? Number(tp["output-branches"]) : 1,
-        temperature: Number(tp["temperature"]),
-        top_p: Number(tp["top-p"]),
-        top_k: Number(tp["top-k"]),
-        repetition_penalty: Number(tp["repetition_penalty"]),
-      };
-      if (api === "openrouter") {
-        body["provider"] = {};
-        body["provider"]["require_parameters"] = true;
-      }
-
-      console.log("Making API request to:", endpoint);
-      console.log("Request body:", body);
-
-      const promise = this.delay(apiDelay * i)
-        .then(async () => {
-          let r = await fetch(endpoint, {
-            method: "POST",
-            body: JSON.stringify(body),
-            headers: {
-              accept: "application/json",
-              "Content-type": "application/json; charset=UTF-8",
-              Authorization: auth_token,
-            },
-          });
-
-          console.log("API response status:", r.status);
-          console.log(
-            "API response headers:",
-            Object.fromEntries(r.headers.entries())
-          );
-
-          if (!r.ok) {
-            const errorText = await r.text();
-            console.error("API error response:", errorText);
-            throw new Error(`API request failed: ${r.status} ${r.statusText}`);
-          }
-
-          return r.json();
-        })
-        .then(response_json => {
-          console.log("API response JSON:", response_json);
-          let outs = [];
-          let choices_length;
-          if (api === "openai") {
-            choices_length = response_json["choices"].length;
-          } else if (api === "openrouter") {
-            choices_length = response_json["choices"].length;
-          } else {
-            choices_length = response_json["output"]["choices"].length;
-          }
-          for (let i = 0; i < choices_length; i++) {
-            if (api === "openai") {
-              outs.push({
-                text: response_json["choices"][i]["text"],
-                model: response_json["model"],
-              });
-            } else if (api === "openrouter") {
-              outs.push({
-                text: response_json["choices"][i]["text"],
-                model: response_json["model"],
-              });
-            } else {
-              outs.push({
-                text: response_json["output"]["choices"][i]["text"],
-                model: response_json["model"],
-              });
-            }
-          }
-          if (api === "openai") {
-            return outs;
-          } else {
-            return outs[0];
-          }
-        });
-      batch_promises.push(promise);
-    }
-    let batch;
-    if (api === "openai") {
-      batch = await Promise.all(batch_promises);
-      batch = batch[0];
-    } else {
-      batch = await Promise.all(batch_promises);
-    }
-    return batch;
-  }
-
-  async delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  async reroll(id, weave = true) {
-    const params = this.prepareRollParams();
-    if (params["sampling-method"] === "base") {
-      // Use togetherRoll for base method
-      this.togetherRoll(id, "base");
-    } else if (params["sampling-method"] === "vae-guided") {
-      // vae-guided not implemented, fall back to base
-      this.togetherRoll(id, "base");
-    } else if (params["sampling-method"] === "together") {
-      this.togetherRoll(id, "together");
-    } else if (params["sampling-method"] === "openrouter") {
-      this.togetherRoll(id, "openrouter");
-    } else if (params["sampling-method"] === "openai") {
-      this.togetherRoll(id, "openai");
-    } else if (params["sampling-method"] === "openai-chat") {
-      await this.openaiChatCompletionsRoll(id);
-    } else {
-      // Default fallback
-      this.togetherRoll(id, "base");
-    }
-  }
-
-  async togetherRoll(id, api = "openai") {
-    this.diceSetup();
-    if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-    if (this.callbacks.updateFocusSummary)
-      await this.callbacks.updateFocusSummary();
-
-    const loomTree = this.callbacks.getLoomTree();
-    const rollFocus = loomTree.nodeStore[id];
-    const lastChildIndex =
-      rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-    // Use current editor content instead of rendered tree content
-    let prompt = this.callbacks.getEditor().value;
-    const params = this.prepareRollParams();
-
-    const apiDelay = params["api-delay"];
-    const tp = {
-      "api-key": params["api-key"],
-      "model-name": params["model-name"],
-      "output-branches": params["output-branches"],
-      "tokens-per-branch": params["tokens-per-branch"],
-      temperature: params["temperature"],
-      "top-p": params["top-p"],
-      "top-k": params["top-k"],
-      repetition_penalty: params["repetition-penalty"],
-      delay: apiDelay,
-    };
-    let newResponses;
-    try {
-      newResponses = await this.togetherGetResponses({
-        endpoint: params["api-url"],
-        prompt: prompt,
-        togetherParams: tp,
-        api: api,
-      });
+      await this.processResponses(
+        newResponses,
+        rollFocus,
+        lastChildIndex,
+        params["api-delay"]
+      );
     } catch (error) {
-      this.diceTeardown();
-      this.errorMessage.textContent = "Error: " + error.message;
-      document.getElementById("errors").classList.add("has-error");
-      console.warn(error);
+      if (this.callbacks.showError) this.callbacks.showError(error.message);
       throw error;
+    } finally {
+      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
+      if (this.callbacks.renderTick) this.callbacks.renderTick();
     }
-    for (let i = 0; i < newResponses.length; i++) {
-      const response = newResponses[i];
-      const responseSummary = await this.delay(apiDelay).then(() => {
-        return this.getSummary(response["text"]);
+  }
+
+  async openaiChatCompletionsRoll(id) {
+    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
+
+    try {
+      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
+      if (this.callbacks.updateFocusSummary)
+        await this.callbacks.updateFocusSummary();
+
+      const loomTree = this.callbacks.getLoomTree();
+      const rollFocus = loomTree.nodeStore[id];
+      const lastChildIndex =
+        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
+      const promptText = loomTree.renderNode(rollFocus);
+      const params = this.prepareRollParams();
+
+      const chatData = this.parseChatData(promptText);
+
+      const requestBody = this.buildChatRequestBody(chatData, params);
+      const headers = this.buildChatRequestHeaders(params);
+
+      const responseData = await APIUtils.makeRequest(params["api-url"], {
+        headers,
+        body: requestBody,
       });
-      const childText = loomTree.renderNode(rollFocus) + response["text"];
+
+      await this.processChatResponses(
+        responseData,
+        chatData,
+        rollFocus,
+        lastChildIndex
+      );
+    } catch (error) {
+      if (this.callbacks.showError) this.callbacks.showError(error.message);
+      return;
+    } finally {
+      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
+      if (this.callbacks.renderTick) this.callbacks.renderTick();
+    }
+  }
+
+  parseChatData(promptText) {
+    try {
+      const chatData = JSON.parse(promptText);
+      if (!chatData.messages || !Array.isArray(chatData.messages)) {
+        throw new Error("Invalid chat format: messages array not found");
+      }
+      return chatData;
+    } catch (jsonError) {
+      return {
+        messages: [{ role: "user", content: promptText.trim() }],
+      };
+    }
+  }
+
+  buildChatRequestBody(chatData, params) {
+    return {
+      model: params["model-name"],
+      messages: chatData.messages,
+      max_tokens: parseInt(params["tokens-per-branch"]),
+      temperature: parseFloat(params["temperature"]),
+      top_p: parseFloat(params["top-p"]),
+      n: parseInt(params["output-branches"]),
+    };
+  }
+
+  buildChatRequestHeaders(params) {
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params["api-key"]}`,
+    };
+  }
+
+  async processChatResponses(
+    responseData,
+    chatData,
+    rollFocus,
+    lastChildIndex
+  ) {
+    const loomTree = this.callbacks.getLoomTree();
+
+    for (const choice of responseData.choices) {
+      const assistantMessage = choice.message;
+      const newChatData = JSON.parse(JSON.stringify(chatData));
+      newChatData.messages.push({
+        role: assistantMessage.role,
+        content: assistantMessage.content,
+      });
+
+      const newChatText = JSON.stringify(newChatData, null, 2);
+      const summary = await this.getSummary(
+        assistantMessage.content || "Assistant response"
+      );
+
+      const responseNode = loomTree.createNode(
+        "gen",
+        rollFocus,
+        newChatText,
+        summary
+      );
+      this.callbacks.updateNodeMetadata(responseNode.id, {
+        model: responseData.model,
+        usage: responseData.usage,
+        finish_reason: choice.finish_reason,
+      });
+    }
+
+    this.updateFocus(rollFocus, lastChildIndex);
+  }
+
+  async processResponses(newResponses, rollFocus, lastChildIndex, apiDelay) {
+    const loomTree = this.callbacks.getLoomTree();
+
+    // Safety check for valid responses
+    if (!Array.isArray(newResponses) || newResponses.length === 0) {
+      console.warn(
+        "processResponses called with invalid responses:",
+        newResponses
+      );
+      return;
+    }
+
+    for (const response of newResponses) {
+      // Safety check for valid response object
+      if (!response || typeof response.text !== "string") {
+        console.warn("Invalid response object:", response);
+        continue;
+      }
+
+      const responseSummary = await APIUtils.delay(apiDelay).then(() => {
+        return this.getSummary(response.text);
+      });
+
+      const childText = loomTree.renderNode(rollFocus) + response.text;
       const responseNode = loomTree.createNode(
         "gen",
         rollFocus,
         childText,
         responseSummary
       );
+
       this.callbacks.updateNodeMetadata(responseNode.id, {
-        model: response["model"],
+        model: response.model,
       });
     }
-    // Focus on the first newly generated response, but only if we're still on the same node
+
+    this.updateFocus(rollFocus, lastChildIndex);
+  }
+
+  updateFocus(rollFocus, lastChildIndex) {
     const currentFocus = this.callbacks.getFocus();
-    if (currentFocus === rollFocus) {
+    const loomTree = this.callbacks.getLoomTree();
+
+    if (currentFocus === rollFocus && this.callbacks.setFocus && loomTree) {
       if (lastChildIndex === null) {
-        // No children before, focus on the first one
-        if (this.callbacks.setFocus) {
-          this.callbacks.setFocus(loomTree.nodeStore[rollFocus.children[0]]);
-        }
+        this.callbacks.setFocus(loomTree.nodeStore[rollFocus.children[0]]);
       } else {
-        // Focus on the first new child (lastChildIndex + 1)
-        if (this.callbacks.setFocus) {
-          this.callbacks.setFocus(
-            loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]]
-          );
-        }
-      }
-    }
-    this.diceTeardown();
-    if (this.callbacks.renderTick) this.callbacks.renderTick();
-  }
-
-  // Add this function for OpenAI Chat Completions API calls
-  async openaiChatCompletionsRoll(id) {
-    this.diceSetup();
-    if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-    if (this.callbacks.updateFocusSummary)
-      await this.callbacks.updateFocusSummary();
-
-    const loomTree = this.callbacks.getLoomTree();
-    const rollFocus = loomTree.nodeStore[id];
-    const lastChildIndex =
-      rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-    let promptText = loomTree.renderNode(rollFocus);
-    const params = this.prepareRollParams();
-
-    try {
-      // Try to parse as JSON first, if it fails, convert regular text to chat format
-      let chatData;
-      try {
-        chatData = JSON.parse(promptText);
-        if (!chatData.messages || !Array.isArray(chatData.messages)) {
-          throw new Error("Invalid chat format: messages array not found");
-        }
-      } catch (jsonError) {
-        // If it's not valid JSON, convert the text to a chat format
-        chatData = {
-          messages: [
-            {
-              role: "user",
-              content: promptText.trim(),
-            },
-          ],
-        };
-      }
-
-      const apiKey = params["api-key"];
-      const modelName = params["model-name"];
-      const temperature = parseFloat(params["temperature"]);
-      const topP = parseFloat(params["top-p"]);
-      const outputBranches = parseInt(params["output-branches"]);
-      const tokensPerBranch = parseInt(params["tokens-per-branch"]);
-
-      // Check if this is Anthropic API
-      const isAnthropic = params["api-url"].includes("api.anthropic.com");
-
-      // Prepare the API request
-      let requestBody;
-      let requestUrl = params["api-url"];
-      let headers = {
-        "Content-Type": "application/json",
-      };
-
-      if (isAnthropic) {
-        // Anthropic API format
-        requestUrl = "https://api.anthropic.com/v1/messages";
-        headers["x-api-key"] = apiKey;
-        headers["anthropic-version"] = "2023-06-01";
-
-        requestBody = {
-          model: modelName,
-          messages: chatData.messages,
-          max_tokens: tokensPerBranch,
-          temperature: temperature,
-          top_p: topP,
-        };
-      } else {
-        // OpenAI format
-        headers.Authorization = `Bearer ${apiKey}`;
-
-        requestBody = {
-          model: modelName,
-          messages: chatData.messages,
-          max_tokens: tokensPerBranch,
-          temperature: temperature,
-          top_p: topP,
-          n: outputBranches,
-        };
-      }
-
-      // Make the API call
-      const response = await fetch(requestUrl, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        let errorMessage = response.statusText;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error?.message || errorMessage;
-        } catch (jsonError) {
-          // If response is not JSON, try to get text content
-          try {
-            const errorText = await response.text();
-            errorMessage = errorText || errorMessage;
-          } catch (textError) {
-            // If we can't even get text, use status text
-            errorMessage = response.statusText;
-          }
-        }
-        throw new Error(`OpenAI API Error: ${errorMessage}`);
-      }
-
-      let responseData;
-      try {
-        responseData = await response.json();
-      } catch (jsonError) {
-        throw new Error(`Invalid JSON response from API: ${jsonError.message}`);
-      }
-
-      // Process responses based on API type
-      if (isAnthropic) {
-        // Handle Anthropic response format
-        const assistantMessage = responseData.content[0];
-
-        // Create a new chat data object with the assistant's response
-        const newChatData = JSON.parse(JSON.stringify(chatData)); // Deep clone
-        newChatData.messages.push({
-          role: "assistant",
-          content: assistantMessage.text,
-        });
-
-        const newChatText = JSON.stringify(newChatData, null, 2);
-
-        // Generate a summary for the new node
-        const summary = await this.getSummary(
-          assistantMessage.text || "Assistant response"
+        this.callbacks.setFocus(
+          loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]]
         );
-
-        // Create the new node
-        const responseNode = loomTree.createNode(
-          "gen",
-          rollFocus,
-          newChatText,
-          summary
-        );
-
-        // Store metadata
-        this.callbacks.updateNodeMetadata(responseNode.id, {
-          model: responseData.model,
-          usage: responseData.usage,
-          finish_reason: responseData.stop_reason,
-        });
-      } else {
-        // Handle OpenAI response format
-        for (let i = 0; i < responseData.choices.length; i++) {
-          const choice = responseData.choices[i];
-          const assistantMessage = choice.message;
-
-          // Create a new chat data object with the assistant's response
-          const newChatData = JSON.parse(JSON.stringify(chatData)); // Deep clone
-          newChatData.messages.push({
-            role: assistantMessage.role,
-            content: assistantMessage.content,
-          });
-
-          const newChatText = JSON.stringify(newChatData, null, 2);
-
-          // Generate a summary for the new node
-          const summary = await this.getSummary(
-            assistantMessage.content || "Assistant response"
-          );
-
-          // Create the new node
-          const responseNode = loomTree.createNode(
-            "gen",
-            rollFocus,
-            newChatText,
-            summary
-          );
-
-          // Store metadata
-          this.callbacks.updateNodeMetadata(responseNode.id, {
-            model: responseData.model,
-            usage: responseData.usage,
-            finish_reason: choice.finish_reason,
-          });
-        }
       }
-
-      // Focus on the first newly generated response, but only if we're still on the same node
-      const currentFocus = this.callbacks.getFocus();
-      if (currentFocus === rollFocus) {
-        if (lastChildIndex === null) {
-          // No children before, focus on the first one
-          if (this.callbacks.setFocus) {
-            this.callbacks.setFocus(loomTree.nodeStore[rollFocus.children[0]]);
-          }
-        } else {
-          // Focus on the first new child (lastChildIndex + 1)
-          if (this.callbacks.setFocus) {
-            this.callbacks.setFocus(
-              loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]]
-            );
-          }
-        }
-      }
-    } catch (error) {
-      this.diceTeardown();
-      this.errorMessage.textContent = "Error: " + error.message;
-      document.getElementById("errors").classList.add("has-error");
-      console.error("OpenAI Chat Completions Error:", error);
-      return;
     }
-
-    this.diceTeardown();
-    if (this.callbacks.renderTick) this.callbacks.renderTick();
-  }
-
-  async rewriteNode(id) {
-    const endpoint = document.getElementById("api-url").value;
-    const rewriteNodePrompt = document.getElementById("rewrite-node-prompt");
-
-    // Use safe API to read prompt file
-    const rewritePrompt =
-      await window.electronAPI.readPromptFile("rewrite.txt");
-    const rewriteFeedback = rewriteNodePrompt.value;
-    const rewriteContext = this.callbacks.getEditor().value;
-
-    // TODO: Add new endpoint? Make tokenizer that returns to client?
-    // Could also make dedicated rewriteNode endpoint
-    let tokens = document.getElementById("tokens-per-branch").value;
-    const outputBranches = document.getElementById("output-branches").value;
-
-    // Make sure we don't give too much or too little context
-    // TODO: Change this once models have longer context/are less limited
-    if (tokens < 256) {
-      tokens = 256;
-    } else if (tokens > 512) {
-      tokens = 512;
-    }
-
-    let prompt = rewritePrompt.trim();
-    prompt += rewriteContext.slice(-(tokens * 8)).trim();
-    prompt += "\n\n";
-    prompt += "Rewrite the text using the following feedback:\n";
-    prompt += rewriteFeedback;
-    prompt += "<|end|>";
-
-    this.diceSetup();
-    r = await fetch(endpoint + "generate", {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: prompt,
-        prompt_node: false,
-        adapter: "evaluator",
-        evaluationPrompt: "",
-        tokens_per_branch: tokens,
-        output_branches: outputBranches,
-      }),
-      headers: {
-        "Content-type": "application/json; charset=UTF-8",
-      },
-    });
-    let batch = await r.json();
-
-    const loomTree = this.callbacks.getLoomTree();
-    const currentFocus = this.callbacks.getFocus();
-    const focusParent = loomTree.nodeStore[currentFocus.parent];
-    const focusParentText = loomTree.renderNode(focusParent);
-    for (i = 0; i < batch.length; i++) {
-      let response = batch[i];
-      let summary = await this.getSummary(response["text"]);
-      const responseNode = loomTree.createNode(
-        "rewrite",
-        currentFocus,
-        focusParentText + response["text"],
-        summary
-      );
-      this.callbacks.updateNodeMetadata(responseNode.id, {
-        feedback: rewriteFeedback,
-        rewritePrompt: prompt,
-        model: response["base_model"],
-      });
-    }
-    const chatPane = document.getElementById("chat-pane");
-    chatPane.innerHTML = "";
-    this.diceTeardown();
-    if (this.callbacks.renderTick) this.callbacks.renderTick();
-  }
-
-  diceSetup() {
-    this.callbacks.setEditorReadOnly(true);
-    const die = document.getElementById("die");
-    if (die) {
-      die.classList.add("rolling");
-    }
-  }
-
-  diceTeardown() {
-    this.callbacks.setEditorReadOnly(false);
-    const die = document.getElementById("die");
-    if (die) {
-      die.classList.remove("rolling");
-    }
-    // Clear any existing errors when generation completes
-    this.errorMessage.textContent = "";
-    document.getElementById("errors").classList.remove("has-error");
   }
 }
 
