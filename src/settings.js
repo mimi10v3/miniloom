@@ -2,6 +2,7 @@
 const servicesTab = document.getElementById("services-tab");
 const samplersTab = document.getElementById("samplers-tab");
 const apiKeysTab = document.getElementById("api-keys-tab");
+const favoritesTab = document.getElementById("favorites-tab");
 const servicesForm = document.getElementById("services-form");
 const samplersForm = document.getElementById("samplers-form");
 const serviceSelect = document.getElementById("service-select");
@@ -29,8 +30,8 @@ const SERVICE_DEFAULTS = {
   },
   openai: {
     "sampling-method": "openai",
-    "service-api-url": "https://api.openai.com/",
-    "service-model-name": "code-davinci-002",
+    "service-api-url": "https://api.openai.com/v1/completions",
+    "service-model-name": "gpt-3.5-turbo-instruct",
     "service-api-delay": "3000",
   },
   "openai-chat": {
@@ -106,6 +107,13 @@ function getApiKeys() {
     samplerSettingsStore["api-keys"] = {};
   }
   return samplerSettingsStore["api-keys"];
+}
+
+function getFavorites() {
+  if (!samplerSettingsStore.favorites) {
+    samplerSettingsStore.favorites = [];
+  }
+  return samplerSettingsStore.favorites;
 }
 
 // Shared form management
@@ -205,6 +213,12 @@ function saveService() {
   populateServiceSelect();
   serviceSelect.value = name;
   populateServiceForm(name, serviceData);
+
+  // Refresh favorites table if it's currently visible
+  if (activeTab === "favorites") {
+    renderFavoritesTable();
+  }
+
   flashSaved(currentEditingService ? "Service updated." : "Service created.");
 }
 
@@ -221,6 +235,12 @@ function deleteService() {
     persistStore();
     populateServiceSelect();
     showServiceForm(false);
+
+    // Refresh favorites table if it's currently visible
+    if (activeTab === "favorites") {
+      renderFavoritesTable();
+    }
+
     flashSaved("Service deleted.");
   }
 }
@@ -353,6 +373,12 @@ function saveSampler() {
   populateSamplerSelect();
   samplerSelect.value = name;
   populateSamplerForm(name, samplerData);
+
+  // Refresh favorites table if it's currently visible
+  if (activeTab === "favorites") {
+    renderFavoritesTable();
+  }
+
   flashSaved(currentEditingSampler ? "Sampler updated." : "Sampler created.");
 }
 
@@ -379,6 +405,12 @@ function deleteSampler() {
     persistStore();
     populateSamplerSelect();
     showSamplerForm(false);
+
+    // Refresh favorites table if it's currently visible
+    if (activeTab === "favorites") {
+      renderFavoritesTable();
+    }
+
     flashSaved("Sampler deleted.");
   }
 }
@@ -477,6 +509,12 @@ function renderApiKeysList() {
         delete apiKeys[name];
         await persistStore();
         renderApiKeysList();
+
+        // Refresh favorites table if it's currently visible
+        if (activeTab === "favorites") {
+          renderFavoritesTable();
+        }
+
         flashSaved("API key deleted.");
       }
     });
@@ -491,11 +529,154 @@ function renderApiKeysList() {
   });
 }
 
+// Favorites management
+function renderFavoritesTable() {
+  const tbody = document.getElementById("favorites-tbody");
+  tbody.innerHTML = "";
+
+  const favorites = getFavorites();
+  const services = getServices();
+  const apiKeys = getApiKeys();
+  const samplers = getSamplers();
+
+  // Create 8 rows (numbered 1-8)
+  for (let i = 0; i < 8; i++) {
+    const tr = document.createElement("tr");
+    const favorite = favorites[i] || {
+      name: "",
+      service: "",
+      key: "",
+      sampler: "",
+    };
+
+    // Row number
+    const tdNumber = document.createElement("td");
+    tdNumber.textContent = i + 1;
+    tdNumber.style.textAlign = "center";
+    tdNumber.style.fontWeight = "600";
+
+    // Name input
+    const tdName = document.createElement("td");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "modelNameType";
+    nameInput.placeholder = "Name";
+    nameInput.maxLength = 8;
+    nameInput.value = favorite.name || "";
+    nameInput.dataset.rowIndex = i;
+    nameInput.dataset.field = "name";
+    nameInput.addEventListener("input", updateFavorite);
+    tdName.appendChild(nameInput);
+
+    // Service dropdown
+    const tdService = document.createElement("td");
+    const serviceSelect = document.createElement("select");
+    serviceSelect.dataset.rowIndex = i;
+    serviceSelect.dataset.field = "service";
+    serviceSelect.addEventListener("change", updateFavorite);
+
+    const serviceOption = document.createElement("option");
+    serviceOption.value = "";
+    serviceOption.textContent = "-- Select Service --";
+    serviceSelect.appendChild(serviceOption);
+
+    Object.keys(services).forEach(serviceName => {
+      const option = document.createElement("option");
+      option.value = serviceName;
+      option.textContent = serviceName;
+      if (serviceName === favorite.service) {
+        option.selected = true;
+      }
+      serviceSelect.appendChild(option);
+    });
+    tdService.appendChild(serviceSelect);
+
+    // Key dropdown
+    const tdKey = document.createElement("td");
+    const keySelect = document.createElement("select");
+    keySelect.dataset.rowIndex = i;
+    keySelect.dataset.field = "key";
+    keySelect.addEventListener("change", updateFavorite);
+
+    const keyOption = document.createElement("option");
+    keyOption.value = "";
+    keyOption.textContent = "-- Select Key --";
+    keySelect.appendChild(keyOption);
+
+    Object.keys(apiKeys).forEach(keyName => {
+      const option = document.createElement("option");
+      option.value = keyName;
+      option.textContent = keyName;
+      if (keyName === favorite.key) {
+        option.selected = true;
+      }
+      keySelect.appendChild(option);
+    });
+    tdKey.appendChild(keySelect);
+
+    // Sampler dropdown
+    const tdSampler = document.createElement("td");
+    const samplerSelect = document.createElement("select");
+    samplerSelect.dataset.rowIndex = i;
+    samplerSelect.dataset.field = "sampler";
+    samplerSelect.addEventListener("change", updateFavorite);
+
+    const samplerOption = document.createElement("option");
+    samplerOption.value = "";
+    samplerOption.textContent = "-- Select Sampler --";
+    samplerSelect.appendChild(samplerOption);
+
+    Object.keys(samplers).forEach(samplerName => {
+      const option = document.createElement("option");
+      option.value = samplerName;
+      option.textContent = samplerName;
+      if (samplerName === favorite.sampler) {
+        option.selected = true;
+      }
+      samplerSelect.appendChild(option);
+    });
+    tdSampler.appendChild(samplerSelect);
+
+    tr.appendChild(tdNumber);
+    tr.appendChild(tdName);
+    tr.appendChild(tdService);
+    tr.appendChild(tdKey);
+    tr.appendChild(tdSampler);
+    tbody.appendChild(tr);
+  }
+}
+
+function updateFavorite(event) {
+  const element = event.target;
+  const rowIndex = parseInt(element.dataset.rowIndex);
+  const field = element.dataset.field;
+  let value = element.value;
+
+  // Limit name field to 8 characters
+  if (field === "name" && value.length > 8) {
+    value = value.substring(0, 8);
+    element.value = value;
+  }
+
+  const favorites = getFavorites();
+
+  // Ensure the array has enough elements
+  while (favorites.length <= rowIndex) {
+    favorites.push({ name: "", service: "", key: "", sampler: "" });
+  }
+
+  favorites[rowIndex][field] = value;
+
+  // Auto-save when a field changes
+  persistStore();
+}
+
 // Tab management
 function showTab(tabElement) {
   servicesTab.classList.remove("visible-tab");
   samplersTab.classList.remove("visible-tab");
   apiKeysTab.classList.remove("visible-tab");
+  favoritesTab.classList.remove("visible-tab");
   tabElement.classList.add("visible-tab");
 }
 
@@ -520,6 +701,9 @@ function setActiveTab(tabName) {
   } else if (activeTab === "samplers") {
     showTab(samplersTab);
     populateSamplerSelect();
+  } else if (activeTab === "favorites") {
+    showTab(favoritesTab);
+    renderFavoritesTable();
   } else {
     showTab(apiKeysTab);
     renderApiKeysList();
@@ -660,6 +844,12 @@ document.addEventListener("DOMContentLoaded", function () {
       setValue("key-name", "");
       setValue("key-value", "");
       renderApiKeysList();
+
+      // Refresh favorites table if it's currently visible
+      if (activeTab === "favorites") {
+        renderFavoritesTable();
+      }
+
       flashSaved("API key added.");
     });
 

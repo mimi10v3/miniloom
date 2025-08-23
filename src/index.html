@@ -310,6 +310,62 @@
         flex: none !important;
       }
 
+      .generate-section {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .favorites-container {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+
+      .favorites-row {
+        display: flex;
+        gap: 4px;
+      }
+
+      .favorite-btn {
+        padding: 4px 8px;
+        border: 1px solid var(--border-secondary);
+        border-radius: 4px;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: 40px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .favorite-btn:hover {
+        background-color: var(--bg-secondary);
+        border-color: var(--border-hover);
+      }
+
+      .favorite-btn:active {
+        background-color: var(--button-secondary);
+        color: white;
+      }
+
+      .favorite-btn.empty {
+        opacity: 0.3;
+        cursor: default;
+      }
+
+      .favorite-btn.empty:hover {
+        background-color: var(--bg-primary);
+        border-color: var(--border-secondary);
+      }
+
       .die {
         height: 24px;
         width: 24px;
@@ -349,6 +405,12 @@
         height: auto;
         border-top: 2px solid var(--error);
         box-shadow: 0 2px 4px rgba(220, 53, 69, 0.1);
+        background-color: #ffebee;
+        border: 2px solid var(--error);
+        position: relative;
+        z-index: 1000;
+        display: block !important;
+        overflow: visible;
       }
 
       .error-message {
@@ -357,6 +419,9 @@
         font-weight: 500;
         margin: 0;
         line-height: 1.4;
+        display: block;
+        white-space: normal;
+        word-wrap: break-word;
       }
 
       /* Tree View */
@@ -816,14 +881,20 @@
               </div>
             </div>
 
-            <div
-              id="generate-button-container"
-              class="generate-button-container"
-            >
-              <div id="die" class="die">🎲</div>
-              <span id="generate-button" class="reroll"
-                >🖋️ <span>Generate</span></span
+            <div class="generate-section">
+              <div id="favorites-container" class="favorites-container">
+                <!-- Favorites buttons will be populated by JavaScript -->
+              </div>
+
+              <div
+                id="generate-button-container"
+                class="generate-button-container"
               >
+                <div id="die" class="die">🎲</div>
+                <span id="generate-button" class="reroll"
+                  >🖋️ <span>Generate</span></span
+                >
+              </div>
             </div>
           </div>
         </div>

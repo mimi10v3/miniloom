@@ -66,11 +66,48 @@ class APIProviders {
     const requestBody = {
       messages: [{ role: "system", content: prompt }],
       model: params["model-name"],
-      max_tokens: params["tokens-per-branch"],
+      max_completion_tokens: params["tokens-per-branch"],
       temperature: params["temperature"],
       top_p: params["top-p"],
-      top_k: params["top-k"],
-      repetition_penalty: params["repetition-penalty"],
+    };
+
+    return APIUtils.makeRequest(endpoint, {
+      headers,
+      body: requestBody,
+    });
+  }
+
+  static async openaiProvider(endpoint, prompt, params) {
+    const headers = {
+      Authorization: `Bearer ${params["api-key"]}`,
+    };
+    const requestBody = {
+      model: params["model-name"],
+      prompt: prompt,
+      max_tokens: Number(params["tokens-per-branch"]),
+      n: Number(params["output-branches"]),
+      temperature: Number(params["temperature"]),
+      top_p: Number(params["top-p"]),
+    };
+
+    return APIUtils.makeRequest(endpoint, {
+      headers,
+      body: requestBody,
+    });
+  }
+
+  static async anthropicProvider(endpoint, prompt, params) {
+    const headers = {
+      "Content-Type": "application/json",
+      "x-api-key": params["api-key"],
+      "anthropic-version": "2023-06-01",
+    };
+    const requestBody = {
+      model: params["model-name"],
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: Number(params["tokens-per-branch"]),
+      temperature: Number(params["temperature"]),
+      top_p: Number(params["top-p"]),
     };
 
     return APIUtils.makeRequest(endpoint, {
@@ -243,6 +280,24 @@ class LLMService {
 
         const text = response.choices[0].message.content;
         return APIUtils.extractThreeWords(text);
+      } else if (samplingMethod === "openai") {
+        // Use openaiProvider for OpenAI completions
+        const openaiParams = {
+          "api-key": params["api-key"],
+          "output-branches": 1,
+          "model-name": params["model-name"],
+          "tokens-per-branch": 10,
+          temperature: params["temperature"],
+          "top-p": params["top-p"],
+        };
+
+        const responseData = await APIProviders.openaiProvider(
+          endpoint,
+          prompt,
+          openaiParams
+        );
+
+        return APIUtils.extractThreeWords(responseData.choices[0].text);
       } else {
         const togetherParams = {
           "api-key": params["api-key"],
@@ -259,7 +314,7 @@ class LLMService {
           endpoint,
           prompt,
           togetherParams,
-          samplingMethod === "openai" ? "openai" : samplingMethod
+          samplingMethod
         );
 
         return APIUtils.extractThreeWords(batch[0].text);
@@ -283,8 +338,9 @@ class LLMService {
       "vae-guided": () => this.togetherRoll(id, "base"), // fallback to base
       together: () => this.togetherRoll(id, "together"),
       openrouter: () => this.togetherRoll(id, "openrouter"),
-      openai: () => this.togetherRoll(id, "openai"),
+      openai: () => this.openaiRoll(id),
       "openai-chat": () => this.openaiChatCompletionsRoll(id),
+      anthropic: () => this.anthropicRoll(id),
     };
 
     const method = methodMap[samplingMethod] || methodMap["base"];
@@ -325,6 +381,111 @@ class LLMService {
         togetherParams,
         api
       );
+
+      await this.processResponses(
+        newResponses,
+        rollFocus,
+        lastChildIndex,
+        params["api-delay"]
+      );
+    } catch (error) {
+      if (this.callbacks.showError) this.callbacks.showError(error.message);
+      throw error;
+    } finally {
+      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
+      if (this.callbacks.renderTick) this.callbacks.renderTick();
+    }
+  }
+
+  async anthropicRoll(id) {
+    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
+
+    try {
+      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
+      if (this.callbacks.updateFocusSummary)
+        await this.callbacks.updateFocusSummary();
+
+      const loomTree = this.callbacks.getLoomTree();
+      const rollFocus = loomTree.nodeStore[id];
+      const lastChildIndex =
+        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
+
+      const prompt = this.callbacks.getEditor().value;
+      const params = this.prepareRollParams();
+
+      const anthropicParams = {
+        "api-key": params["api-key"],
+        "model-name": params["model-name"],
+        "output-branches": params["output-branches"],
+        "tokens-per-branch": params["tokens-per-branch"],
+        temperature: params["temperature"],
+        "top-p": params["top-p"],
+      };
+
+      const responseData = await APIProviders.anthropicProvider(
+        params["api-url"],
+        prompt,
+        anthropicParams
+      );
+
+      // Anthropic returns a single response, not multiple choices like OpenAI
+      const newResponses = [
+        {
+          text: responseData.content[0].text,
+          model: responseData.model,
+        },
+      ];
+
+      await this.processResponses(
+        newResponses,
+        rollFocus,
+        lastChildIndex,
+        params["api-delay"]
+      );
+    } catch (error) {
+      if (this.callbacks.showError) this.callbacks.showError(error.message);
+      throw error;
+    } finally {
+      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
+      if (this.callbacks.renderTick) this.callbacks.renderTick();
+    }
+  }
+
+  async openaiRoll(id) {
+    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
+
+    try {
+      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
+      if (this.callbacks.updateFocusSummary)
+        await this.callbacks.updateFocusSummary();
+
+      const loomTree = this.callbacks.getLoomTree();
+      const rollFocus = loomTree.nodeStore[id];
+      const lastChildIndex =
+        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
+
+      const prompt = this.callbacks.getEditor().value;
+      const params = this.prepareRollParams();
+
+      const openaiParams = {
+        "api-key": params["api-key"],
+        "model-name": params["model-name"],
+        "output-branches": params["output-branches"],
+        "tokens-per-branch": params["tokens-per-branch"],
+        temperature: params["temperature"],
+        "top-p": params["top-p"],
+      };
+
+      const responseData = await APIProviders.openaiProvider(
+        params["api-url"],
+        prompt,
+        openaiParams
+      );
+
+      const newResponses = responseData.choices.map(choice => ({
+        text: choice.text,
+        model: responseData.model,
+      }));
 
       await this.processResponses(
         newResponses,
@@ -399,7 +560,7 @@ class LLMService {
     return {
       model: params["model-name"],
       messages: chatData.messages,
-      max_tokens: parseInt(params["tokens-per-branch"]),
+      max_completion_tokens: parseInt(params["tokens-per-branch"]),
       temperature: parseFloat(params["temperature"]),
       top_p: parseFloat(params["top-p"]),
       n: parseInt(params["output-branches"]),

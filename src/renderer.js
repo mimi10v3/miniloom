@@ -260,8 +260,6 @@ function renderFocusedNode() {
   updateFocusedNodeTitle();
   updateThumbState();
   updateCounterDisplay(editor.value);
-  errorMessage.textContent = "";
-  document.getElementById("errors").classList.remove("has-error");
   appState.focusedNode.read = true;
 }
 
@@ -505,6 +503,7 @@ const onSettingsUpdated = async () => {
       populateServiceSelector();
       populateSamplerSelector();
       populateApiKeySelector();
+      renderFavoritesButtons();
     }
   } catch (err) {
     console.error("Load Settings Error:", err);
@@ -563,14 +562,45 @@ async function init() {
         if (die) {
           die.classList.toggle("rolling", isLoading);
         }
-        if (!isLoading) {
-          this.clearErrors();
-        }
+        // Don't clear errors when loading ends - let them persist
       },
       showError: message => {
-        errorMessage.textContent = `Error: ${message}`;
-        document.getElementById("errors").classList.add("has-error");
-        console.error(message);
+        const errorMsgEl = document.getElementById("error-message");
+        const errorsEl = document.getElementById("errors");
+
+        if (errorMsgEl && errorsEl) {
+          // Set the error message text
+          errorMsgEl.textContent = `Error: ${message}`;
+
+          // Add the error class
+          errorsEl.classList.add("has-error");
+
+          // Force visibility with inline styles
+          errorsEl.style.display = "block";
+          errorsEl.style.height = "auto";
+          errorsEl.style.background = "#ffebee";
+          errorsEl.style.border = "2px solid #dc3545";
+          errorsEl.style.padding = "12px 16px";
+          errorsEl.style.margin = "0";
+          errorsEl.style.position = "relative";
+          errorsEl.style.zIndex = "1000";
+
+          errorMsgEl.style.color = "#dc3545";
+          errorMsgEl.style.fontSize = "14px";
+          errorMsgEl.style.fontWeight = "500";
+          errorMsgEl.style.margin = "0";
+          errorMsgEl.style.lineHeight = "1.4";
+          errorMsgEl.style.display = "block";
+          errorMsgEl.style.minHeight = "20px";
+          errorMsgEl.style.visibility = "visible";
+          errorMsgEl.style.opacity = "1";
+          errorMsgEl.style.height = "auto";
+          errorMsgEl.style.overflow = "visible";
+          errorMsgEl.style.whiteSpace = "normal";
+          errorMsgEl.style.wordWrap = "break-word";
+          errorMsgEl.style.position = "static";
+          errorMsgEl.style.transform = "none";
+        }
       },
       clearErrors: () => {
         errorMessage.textContent = "";
@@ -615,6 +645,7 @@ async function init() {
     populateServiceSelector();
     populateSamplerSelector();
     populateApiKeySelector();
+    renderFavoritesButtons();
     addSettingsChangeListeners();
 
     // Set up event handlers
@@ -960,6 +991,89 @@ function populateApiKeySelector() {
     appState.samplerSettingsStore["api-keys"][currentSelection]
   ) {
     apiKeySelector.value = currentSelection;
+  }
+}
+
+function renderFavoritesButtons() {
+  const favoritesContainer = document.getElementById("favorites-container");
+  if (!favoritesContainer) {
+    console.warn("Favorites container not found!");
+    return;
+  }
+
+  favoritesContainer.innerHTML = "";
+
+  const favorites = appState.samplerSettingsStore?.favorites || [];
+  const services = appState.samplerSettingsStore?.services || {};
+  const apiKeys = appState.samplerSettingsStore?.["api-keys"] || {};
+  const samplers = appState.samplerSettingsStore?.samplers || {};
+
+  // Create two rows of 4 buttons each
+  for (let row = 0; row < 2; row++) {
+    const favoritesRow = document.createElement("div");
+    favoritesRow.className = "favorites-row";
+
+    for (let col = 0; col < 4; col++) {
+      const index = row * 4 + col;
+      const favorite = favorites[index] || {
+        name: "",
+        service: "",
+        key: "",
+        sampler: "",
+      };
+
+      const favoriteBtn = document.createElement("button");
+      favoriteBtn.className = "favorite-btn";
+      favoriteBtn.textContent = favorite.name || `${index + 1}`;
+
+      // Check if this favorite has all required fields
+      const hasService = favorite.service && services[favorite.service];
+      const hasKey = favorite.key && apiKeys[favorite.key];
+      const hasSampler = favorite.sampler && samplers[favorite.sampler];
+      const isComplete = hasService && hasKey && hasSampler;
+
+      if (!isComplete || !favorite.name) {
+        favoriteBtn.classList.add("empty");
+      } else {
+        favoriteBtn.addEventListener("click", () => applyFavorite(index));
+      }
+
+      favoritesRow.appendChild(favoriteBtn);
+    }
+
+    favoritesContainer.appendChild(favoritesRow);
+  }
+}
+
+function applyFavorite(index) {
+  const favorites = appState.samplerSettingsStore?.favorites || [];
+  const favorite = favorites[index];
+
+  if (!favorite || !favorite.name) {
+    return;
+  }
+
+  // Update the selectors
+  const serviceSelector = document.getElementById("service-selector");
+  const apiKeySelector = document.getElementById("api-key-selector");
+  const samplerSelector = document.getElementById("sampler-selector");
+
+  if (serviceSelector && favorite.service) {
+    serviceSelector.value = favorite.service;
+  }
+  if (apiKeySelector && favorite.key) {
+    apiKeySelector.value = favorite.key;
+  }
+  if (samplerSelector && favorite.sampler) {
+    samplerSelector.value = favorite.sampler;
+  }
+
+  // Save the current settings
+  saveCurrentSettings();
+
+  // Trigger generation
+  if (llmService && appState.focusedNode) {
+    llmService.reroll(appState.focusedNode.id);
   }
 }
 

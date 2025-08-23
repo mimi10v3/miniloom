@@ -341,6 +341,30 @@
         font-family: inherit;
       }
 
+      /* Favorites table styling */
+      #favorites-tab table.keys input,
+      #favorites-tab table.keys select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--border-secondary);
+        border-radius: 4px;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 13px;
+        box-sizing: border-box;
+      }
+
+      #favorites-tab table.keys input:focus,
+      #favorites-tab table.keys select:focus {
+        outline: none;
+        border-color: var(--button-secondary);
+        box-shadow: 0 0 0 2px var(--shadow-focus);
+      }
+
+      #favorites-tab table.keys input::placeholder {
+        color: var(--text-muted);
+      }
+
       /* Welcome message styling */
       #welcome-message {
         background: linear-gradient(
@@ -408,6 +432,7 @@
         <button class="tab-btn active" data-tab="services">🌐 Services</button>
         <button class="tab-btn" data-tab="api-keys">🔑 API Keys</button>
         <button class="tab-btn" data-tab="samplers">🎲 Samplers</button>
+        <button class="tab-btn" data-tab="favorites">❤️ Favorites</button>
         <button class="close-btn" id="close-settings">×</button>
       </div>
 
@@ -655,6 +680,33 @@
             <tr>
               <td colspan="3" class="muted">No API keys saved.</td>
             </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Favorites Tab -->
+      <div id="favorites-tab" class="tab-content">
+        <div class="row" style="margin-bottom: 8px">
+          <label>Favorites Configuration</label>
+          <span class="muted"
+            >Configure up to 8 favorite combinations of Service, Key, and
+            Sampler for quick access.</span
+          >
+        </div>
+
+        <!-- Favorites Table -->
+        <table class="keys">
+          <thead>
+            <tr>
+              <th style="width: 50px">#</th>
+              <th style="width: 100px">Name</th>
+              <th style="width: 150px">Service</th>
+              <th style="width: 150px">Key</th>
+              <th style="width: 150px">Sampler</th>
+            </tr>
+          </thead>
+          <tbody id="favorites-tbody">
+            <!-- Favorites rows will be populated by JavaScript -->
           </tbody>
         </table>
       </div>
