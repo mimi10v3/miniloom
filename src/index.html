@@ -23,8 +23,8 @@
         max-width: 350px;
         background-color: var(--bg-secondary);
         border-left: 1px solid var(--border-primary);
-        overflow-y: auto;
-        padding: var(--spacing-lg);
+        overflow: hidden;
+        padding: 0;
         display: flex;
         flex-direction: column;
         height: 100vh;
@@ -42,42 +42,52 @@
       .top-bar {
         border-bottom: 1px solid var(--border-primary);
         padding: var(--spacing-sm) var(--spacing-lg);
-        min-height: 36px;
+        height: 56px;
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         background-color: var(--bg-primary);
       }
 
       .top-bar-content {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: center;
         width: 100%;
-        padding-bottom: var(--spacing-xs);
       }
 
       .logo-title {
         display: flex;
+        flex-direction: row;
         align-items: center;
         gap: var(--spacing-sm);
       }
 
       .app-logo {
-        width: 24px;
-        height: 24px;
+        width: 48px;
+        height: 48px;
         object-fit: contain;
       }
 
       .app-title {
         font-weight: var(--font-weight-semibold);
-        font-size: var(--font-size-lg);
+        font-size: 1.4em;
         color: var(--text-primary);
+        line-height: 1;
+      }
+
+      .author-info {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
 
       .file-info {
         display: flex;
-        align-items: baseline;
-        gap: var(--spacing-sm);
+        flex-direction: column;
+        align-items: flex-end;
+        gap: var(--spacing-xs);
         font-size: var(--font-size-base);
         color: var(--text-secondary);
       }
@@ -85,21 +95,31 @@
       .tree-stats {
         font-size: var(--font-size-sm);
         color: var(--text-light);
-        margin-left: var(--spacing-md);
         display: flex;
-        align-items: baseline;
-        line-height: 1;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .tree-stats span {
+        cursor: help;
+        padding: 2px 4px;
+        border-radius: 3px;
+        transition: background-color 0.2s;
+      }
+
+      .tree-stats span:hover {
+        background-color: var(--bg-secondary);
+      }
+
+      .file-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
       .current-filename {
         font-weight: var(--font-weight-medium);
-      }
-
-      .unsaved-dot {
-        color: var(--error);
-        font-weight: var(--font-weight-bold);
-        font-size: var(--font-size-xl);
-        animation: pulse 2s infinite;
       }
 
       #context {
@@ -111,13 +131,13 @@
       }
 
       .editor {
-        border: none;
+        border: 1px solid #e0e0e0;
+        border-bottom: none;
         outline: none;
         flex: 1;
         width: 100%;
         height: 100%;
         overflow-y: auto;
-        box-shadow: 0 0 5px rgba(0, 0, 0, 0.4);
         padding: 16px;
         resize: none;
         font-family: inherit;
@@ -125,15 +145,28 @@
         line-height: 1.5;
         min-height: 0;
         max-height: none;
+        border-radius: 4px 4px 0 0;
       }
 
-      .user-prompt {
-        background-color: rgba(0, 100, 0, 0.15);
+      .editor-footer {
+        background-color: #e8e8e8;
+        border: 1px solid #e0e0e0;
+        border-top: none;
+        padding: 6px 12px;
+        font-size: 11px;
+        color: #555;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 0 0 4px 4px;
       }
 
-      .over-token-limit {
-        background-color: rgba(100, 0, 0, 0.15);
+      .editor-stats {
+        font-family: monospace;
+        font-size: 11px;
       }
+
+
 
       .controls {
         background-color: var(--bg-primary);
@@ -151,8 +184,8 @@
 
       .controls-left {
         display: flex;
-        flex-direction: column;
-        gap: var(--spacing-xs);
+        flex-direction: row;
+        gap: var(--spacing-md);
         flex: 1;
         min-width: 0;
         align-items: flex-start;
@@ -167,63 +200,119 @@
         margin-right: 0;
       }
 
-      .focused-node-title {
+      .node-stats-display {
         font-size: var(--font-size-base);
+        color: var(--text-secondary);
+        margin-top: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .subtree-info {
+        cursor: help;
+        position: relative;
+      }
+
+      .subtree-info:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-primary);
+        border: 1px solid var(--border-primary);
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        white-space: pre-line;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        color: var(--text-primary);
+        min-width: 120px;
+        text-align: left;
+      }
+
+      .node-info-line {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        font-size: 12px;
+        flex-wrap: wrap;
+      }
+
+      .node-info-line span {
+        padding: 0;
+        border-radius: 3px;
+        transition: background-color 0.2s;
+        font-size: var(--font-size-base);
+        line-height: 1.4;
+        vertical-align: baseline;
+      }
+
+
+
+      #node-summary {
         font-weight: var(--font-weight-semibold);
         color: var(--text-primary);
-        max-width: 300px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        margin-bottom: 2px;
       }
 
-      .node-summary-display {
-        font-size: var(--font-size-sm);
+      /* Thumbs for focused node display */
+      .node-stats-display .thumbs {
+        font-size: 1.3em;
+        height: 36px;
+        width: 36px;
+        border-radius: 8px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.7;
+        transition: all 0.2s;
+        margin-left: 8px;
+        cursor: pointer;
+      }
+
+      .node-stats-display .thumbs:hover {
+        opacity: 1;
+        background-color: #0056b3;
+        transform: scale(1.05);
+      }
+
+      .node-stats-display .thumbs:active {
+        transform: scale(0.95);
+        background-color: #004085;
+      }
+
+      .node-stats-display .thumbs.chosen {
+        background-color: #0056b3 !important;
+        opacity: 1 !important;
+      }
+
+
+
+      .editor-stats span {
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+
+      .editor-stats .positive {
+        color: #28a745;
         font-weight: var(--font-weight-medium);
-        color: var(--text-secondary);
-        max-width: 300px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
-      #controls-form {
-        display: flex;
-        align-items: center;
-        min-width: 0;
-        flex-shrink: 0;
-      }
-
-      #buttons {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: var(--spacing-sm);
-        width: 100%;
-      }
-
-      #buttons #session-buttons {
-        margin-left: 0;
+      .editor-stats .negative {
+        color: #dc3545;
+        font-weight: var(--font-weight-medium);
       }
 
       #thumbs-display {
         display: flex;
         gap: var(--spacing-xs);
-      }
-
-      #batch-item-index {
-        font-size: var(--font-size-base);
-        font-weight: var(--font-weight-medium);
-        color: var(--text-secondary);
-        margin-left: var(--spacing-sm);
-      }
-
-      #prompt-token-counter {
-        margin-left: auto;
-        font-size: var(--font-size-base);
-        font-weight: var(--font-weight-medium);
-        color: var(--text-secondary);
+        align-items: flex-start;
+        flex-shrink: 0;
       }
 
       #generation-controls {
@@ -397,20 +486,28 @@
         transition: all 0.3s ease;
         border-top: none;
         background-color: var(--error-bg-light);
+        position: relative;
+        z-index: 10;
       }
 
       .errors.has-error {
-        margin: 8px 0;
+        margin: 0;
         padding: 12px 16px;
         height: auto;
-        border-top: 2px solid var(--error);
         box-shadow: 0 2px 4px rgba(220, 53, 69, 0.1);
         background-color: #ffebee;
-        border: 2px solid var(--error);
+        border: none;
         position: relative;
         z-index: 1000;
         display: block !important;
         overflow: visible;
+      }
+
+      .error-content {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
       }
 
       .error-message {
@@ -422,25 +519,57 @@
         display: block;
         white-space: normal;
         word-wrap: break-word;
+        flex: 1;
+      }
+
+      .error-close {
+        background: none;
+        border: none;
+        color: var(--error);
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .error-close:hover {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #b02a37;
+      }
+
+      .error-close:active {
+        background-color: rgba(220, 53, 69, 0.2);
       }
 
       /* Tree View */
       .loom-tree-view {
         flex: 1;
-        margin-left: 0px;
+        margin: var(--spacing-lg);
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-size: 14px;
         line-height: 1.3;
         min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
       }
 
       .loom-tree-view ul {
         margin-top: 0;
-        padding-left: 1.2em;
+        padding-left: 0.8em;
         margin-left: 0em;
         list-style: none;
         position: relative;
+        width: 100%;
+        min-width: 0;
       }
 
       .loom-tree-view > ul {
@@ -462,21 +591,22 @@
         content: none;
       }
 
+      /* Properly stop the vertical connector at the last child */
       .loom-tree-view li:last-child::after {
         content: "";
         position: absolute;
-        left: -1.2em;
-        top: 0.8em;
-        bottom: -30px;
+        left: -0.8em; /* align with ul::before */
+        top: 0.9em; /* start just below the elbow */
+        bottom: 0; /* mask to bottom */
         width: 1px;
-        background: white;
+        background: var(--bg-secondary); /* match nav background to hide tail */
         z-index: 2;
       }
 
       .loom-tree-view li::before {
         content: "";
         position: absolute;
-        left: -1.2em;
+        left: -0.8em;
         top: 0.8em;
         width: 0.8em;
         height: 1px;
@@ -486,17 +616,17 @@
       .loom-tree-view li {
         position: relative;
         margin: 1px 0;
+        width: 100%;
+        min-width: 0;
       }
 
       .loom-tree-view li a {
         min-height: 1.2em;
-        min-width: 8em;
-        max-width: 200px;
-        display: inline-block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        padding: 2px var(--spacing-sm);
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 6px 2px var(--spacing-md);
         border-radius: var(--radius-md);
         text-decoration: none;
         color: var(--text-primary);
@@ -504,109 +634,237 @@
         transition: all var(--transition-normal);
         position: relative;
         vertical-align: middle;
+        flex-wrap: nowrap;
+        box-sizing: border-box;
+      }
+
+      /* Status and rating spans - fixed width, no stretching */
+      .loom-tree-view li a .node-status,
+      .loom-tree-view li a .node-rating,
+      .loom-tree-view li a .author-indicator {
+        flex-shrink: 0;
+        flex-grow: 0;
+        width: auto;
+        min-width: 0;
+      }
+
+      /* Hide empty spans to prevent spacing */
+      .loom-tree-view li a .node-status:empty,
+      .loom-tree-view li a .node-rating:empty,
+      .loom-tree-view li a .author-indicator:empty {
+        display: none;
+      }
+
+      /* Ensure non-empty spans are visible */
+      .loom-tree-view li a .node-status:not(:empty),
+      .loom-tree-view li a .node-rating:not(:empty),
+      .loom-tree-view li a .author-indicator:not(:empty) {
+        display: inline-block;
+      }
+
+      /* Text span - flexible, truncates with ellipsis */
+      .loom-tree-view li a span:not(.node-status):not(.node-rating):not(.author-indicator):not(.subtree-badge) {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-right: 4px; /* Space between text and badge */
+        display: block; /* Ensure proper text truncation */
+        max-width: 100%; /* Ensure it doesn't overflow */
+      }
+
+      /* Badge - fixed size, always visible */
+      .loom-tree-view li a .subtree-badge {
+        flex-shrink: 0;
+        flex-grow: 0;
+        width: auto;
+        min-width: 12px;
+        max-width: none;
+        margin-left: auto; /* Push to the right */
       }
 
       .loom-tree-view li a:hover {
         cursor: pointer;
         background: var(--bg-focus);
-        box-shadow: inset 2px 0 0 rgba(213, 4, 2, 0.4);
-        padding-left: var(--spacing-md);
         transform: translateX(1px);
+      }
+
+      /* Prevent hover effects on focused and parent nodes */
+      .loom-tree-view #focused-node > a:hover,
+      .loom-tree-view .parent-of-focused > a:hover {
+        transform: none;
       }
 
       .downvoted,
       .downvoted * {
-        opacity: 0.7;
+        opacity: 0.85;
       }
 
       .loom-tree-view #focused-node > a {
         background: var(--bg-active);
-        font-weight: var(--font-weight-semibold);
-        box-shadow: inset 4px 0 0 var(--primary);
-        padding-left: var(--spacing-md);
+        font-weight: var(--font-weight-semibold) !important;
+        border-left: 4px solid var(--primary);
       }
 
       .loom-tree-view #focused-node > a:hover {
         transform: none;
         background: var(--bg-active);
-        box-shadow: inset 4px 0 0 var(--primary);
-        padding-left: var(--spacing-md);
+        border-left: 4px solid var(--primary);
       }
 
-      .loom-tree-view #focused-node .tree-thumb {
-        color: var(--primary) !important;
-        font-weight: var(--font-weight-semibold);
+      .loom-tree-view li a .unread-node {
+        font-weight: 520;
+        font-style: italic;
       }
 
       .parent-of-focused > a {
         background: var(--bg-focus);
         font-weight: var(--font-weight-medium);
-        box-shadow: inset 2px 0 0 rgba(213, 4, 2, 0.3);
-        padding-left: var(--spacing-md);
+        border-left: 3px solid rgba(213, 4, 2, 0.35);
       }
 
-      .unread-tree-node > a {
-        font-weight: var(--font-weight-bold);
+      /* subtler compressed children link color */
+      .compressed-children-link {
+        color: var(--text-muted);
       }
 
-      .unread-tree-node > a::before {
-        content: "● ";
-        color: var(--unread-indicator);
-        font-size: 0.7em;
-        display: inline;
+      .subtree-badge {
+        background-color: #007bff;
+        color: white;
+        padding: 1px 4px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 500;
+        display: inline-block;
+        min-width: 12px;
+        text-align: center;
+        line-height: 1.2;
+        flex-shrink: 0;
+        flex-grow: 0;
+        width: auto;
+        max-width: none;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .subtree-badge-unread {
+        background-color: #dc3545;
+      }
+
+      .root-node-link {
+        font-weight: bold;
+        color: #007bff;
+        font-size: 1.1em;
+      }
+
+      .author-indicator {
+        color: #007bff;
+        font-size: 0.9em;
         margin-right: 2px;
       }
 
-      .type-user > a::after {
-        content: " 👤";
-        font-size: 0.8em;
+
+
+
+
+      /* Styling for expanded parent nodes */
+      .expanded-parent-node {
+        margin: 2px 0;
+        padding: 0;
+        border-left: 2px solid rgba(213, 4, 2, 0.2);
+        background: rgba(213, 4, 2, 0.03);
+        border-radius: 4px;
+        transition: all var(--transition-normal);
       }
 
-      .tree-thumb {
-        font-size: 0.8em;
-        margin-left: var(--spacing-xs);
+      .expanded-parent-node:hover {
+        background: rgba(213, 4, 2, 0.06);
+        border-left-color: rgba(213, 4, 2, 0.3);
       }
 
-      .tree-thumb.thumb-up {
-        color: var(--success);
+      .expanded-parent-node a {
+        padding: 6px 10px !important;
+        font-size: 13px;
+        color: var(--text-secondary);
+        font-weight: var(--font-weight-medium);
       }
 
-      .tree-thumb.thumb-down {
-        color: var(--error);
+      .expanded-parent-node a:hover {
+        background: rgba(213, 4, 2, 0.08) !important;
+        transform: none !important;
+        color: var(--text-primary);
       }
 
-      .hidden-parents > a::before {
-        content: "⋯ ";
-        color: rgba(41, 49, 33, 0.6);
-        font-weight: var(--font-weight-bold);
-        font-size: 0.9em;
+      .expanded-parents-container {
+        margin: 6px 0;
+        padding: 6px;
       }
 
-      .hidden-children > a::after {
-        content: " ⋯";
-        color: rgba(41, 49, 33, 0.6);
-        font-weight: var(--font-weight-bold);
-        font-size: 0.9em;
+      .hidden-parents-divider {
+        margin: 8px 0;
+        border: none;
+        border-top: 1px solid rgba(41, 49, 33, 0.2);
       }
 
       /* Search Components */
       .search-container {
-        margin-bottom: var(--spacing-md);
+        margin: 0;
         padding: 0;
-        position: relative;
+        position: sticky;
+        top: 0;
         width: 100%;
         flex-shrink: 0;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-primary);
+        height: 56px;
+        display: flex;
+        align-items: center;
+        z-index: 5;
+      }
+
+      .search-input-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: var(--spacing-sm) var(--spacing-lg);
+        display: flex;
+        align-items: center;
       }
 
       .search-input {
         width: 100%;
-        padding: 12px;
-        border: 1px solid rgba(0, 0, 0, 0.2);
+        padding: 8px 12px;
+        padding-right: 40px;
+        border: 1px solid var(--border-color);
         border-radius: 6px;
         font-size: 14px;
         text-align: left !important;
         transition: all 0.2s ease;
         box-sizing: border-box;
+        background: var(--bg-primary);
+      }
+
+      .search-clear {
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        font-size: 18px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 3px;
+        transition: all 0.2s ease;
+        line-height: 1;
+      }
+
+      .search-clear:hover {
+        color: var(--text-primary);
+        background-color: var(--bg-secondary);
       }
 
       .search-input:focus {
@@ -617,41 +875,6 @@
 
       .search-input:hover {
         border-color: var(--border-hover);
-      }
-
-      .search-suggestions {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-secondary);
-        border-top: none;
-        border-radius: 0 0 3px 3px;
-        max-height: 150px;
-        overflow-y: auto;
-        z-index: 1000;
-        display: none;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      }
-
-      .search-suggestion {
-        padding: var(--spacing-sm);
-        cursor: pointer;
-        border-bottom: 1px solid var(--border-primary);
-        transition: background-color var(--transition-normal);
-      }
-
-      .search-suggestion:hover {
-        background-color: var(--search-hover) !important;
-      }
-
-      .search-suggestion:last-child {
-        border-bottom: none;
-      }
-
-      .search-suggestion-highlighted {
-        background-color: var(--search-highlight) !important;
       }
 
       .search-result-item {
@@ -717,92 +940,9 @@
         padding: 1px 2px;
       }
 
-      /* Additional styles for specific elements */
-      .response {
-        padding: 1rem;
-        display: flex;
-        white-space: pre-line;
-      }
 
-      .response .thumbs {
-        padding-left: 0.5rem;
-      }
 
-      .response .chosen {
-        padding-left: 0.5rem;
-      }
 
-      .branch-controls {
-        display: flex;
-        flex-direction: column;
-        margin-top: auto;
-      }
-
-      .branch-controls .reward-score {
-        margin-top: 5px;
-        padding-left: 0.5em;
-        margin-left: auto;
-        margin-right: auto;
-      }
-
-      .branch-control-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-sm);
-        min-height: 36px;
-        align-items: flex-end;
-      }
-
-      .thumbs-container {
-        display: flex;
-        gap: var(--spacing-xs);
-        align-items: center;
-      }
-
-      #gen-controls {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: var(--spacing-sm);
-        flex-shrink: 0;
-      }
-
-      #rewrite-button {
-        font-size: 1.3em;
-        cursor: pointer;
-        height: 25px;
-        padding-left: 0.75rem;
-      }
-
-      #rewrite-node-submit {
-        width: 210px;
-        background-color: var(--bg-primary);
-        cursor: pointer;
-        margin-top: 5px;
-        padding: 5px;
-        font-size: 0.9em;
-      }
-
-      #rewrite-node-prompt {
-        border: none;
-        outline: none;
-        resize: none;
-        height: 400px;
-        width: 200px;
-        box-shadow: 0 0 5px var(--shadow-heavy);
-        margin-top: 5px;
-        padding: 5px;
-      }
-
-      #chat-pane {
-        margin-top: 50px;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .nav-mode {
-        box-shadow: 0 0 15px blue;
-      }
     </style>
   </head>
   <body>
@@ -819,16 +959,25 @@
               <span class="app-title">MiniHF MiniLoom</span>
             </div>
             <div class="file-info">
-              <span id="current-filename" class="current-filename"
-                >Untitled</span
-              >
-              <span
-                id="unsaved-indicator"
-                class="unsaved-dot"
-                style="display: none"
-                >•</span
-              >
-              <div id="tree-stats" class="tree-stats"></div>
+              <div class="file-title-row">
+                <span id="current-filename" class="current-filename"
+                  >Untitled</span
+                >
+                <span id="file-author" class="author-info"
+                  ><span>👤</span><span id="author-name">Author</span></span
+                >
+              </div>
+              <div id="tree-stats" class="tree-stats">
+                <div>
+                  <span title="Total nodes in tree">🍃 <span id="tree-total-nodes">0</span></span>
+                  <span title="Maximum depth">📏 <span id="tree-max-depth">0</span></span>
+                  <span title="Largest node by word count">📝 <span id="tree-max-words">0</span></span>
+                  <span title="Largest node by character count">🔤 <span id="tree-max-chars">0</span></span>
+                </div>
+                <div>
+                  <span title="Last node created">🕐 <span id="tree-last-update">N/A</span></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -839,25 +988,45 @@
             class="editor"
             placeholder="Your prompt goes here."
           ></textarea>
+          <div id="editor-footer" class="editor-footer">
+            <div id="editor-stats" class="editor-stats">
+              <span title="Word count"><span id="editor-word-count">0</span><span title="Net word change" id="editor-word-change">(+0)</span> words</span>
+              <span title="Character count"><span id="editor-char-count">0</span><span title="Net character change" id="editor-char-change">(+0)</span> chars</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="errors" class="errors">
+          <div class="error-content">
+            <p id="error-message" class="error-message"></p>
+            <button id="error-close" class="error-close" title="Clear error">
+              ×
+            </button>
+          </div>
         </div>
 
         <div id="controls" class="controls">
-          <div id="controls-left" class="controls-left">
-            <div id="focused-node-title" class="focused-node-title"></div>
-            <div id="node-summary-display" class="node-summary-display"></div>
-            <div id="controls-form">
-              <div id="buttons">
-                <span id="batch-item-index"></span>
-                <div id="session-buttons">
-                  <span id="prompt-token-counter">0</span>
-                </div>
-              </div>
+                  <div id="controls-left" class="controls-left">
+          <div id="node-stats-display" class="node-stats-display">
+            <div class="node-info-line">
+              <span title="Node ID" id="node-position">📍 1: </span>
+              <span title="Node summary" id="node-summary">Untitled</span>
             </div>
-            <div id="thumbs-display">
-              <span id="thumb-up" class="thumbs">👍</span>
-              <span id="thumb-down" class="thumbs">👎</span>
+            <div class="node-info-line">
+              <span title="Author"><span id="node-author-emoji">👤</span> <span id="node-author">Unknown</span></span>
+            </div>
+            <div class="node-info-line">
+              <span id="node-metadata">🕐 N/A | 📏 0</span>
+              <span id="subtree-info" class="subtree-info" style="display: none;">
+                🍃 <span id="subtree-children">0</span>/<span id="subtree-total">0</span>
+              </span>
             </div>
           </div>
+          <div id="thumbs-display" class="thumbs-display">
+            <span id="thumb-up" class="thumbs">👍</span>
+            <span id="thumb-down" class="thumbs">👎</span>
+          </div>
+        </div>
 
           <div id="controls-right" class="controls-right">
             <div id="generation-controls">
@@ -898,19 +1067,25 @@
             </div>
           </div>
         </div>
-        <div id="errors" class="errors">
-          <p id="error-message" class="error-message"></p>
-        </div>
       </div>
-      <div id="nav-pane" class="nav-pane">
+    </div>
+    <div id="nav-pane" class="nav-pane">
         <div id="search-container" class="search-container">
-          <input
-            type="text"
-            id="search-input"
-            class="search-input"
-            placeholder="Search nodes..."
-          />
-          <div id="search-suggestions" class="search-suggestions"></div>
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              id="search-input"
+              class="search-input"
+              placeholder="Search nodes..."
+            />
+            <button
+              id="search-clear"
+              class="search-clear"
+              style="display: none"
+            >
+              ×
+            </button>
+          </div>
         </div>
         <div id="loom-tree-view" class="loom-tree-view"></div>
         <!-- Search result containers - hidden by default -->
@@ -929,8 +1104,10 @@
       </div>
     </div>
     <script src="utils.js"></script>
+    <script src="model.js"></script>
     <script src="llm-service.js"></script>
     <script src="tree-nav.js"></script>
+    <script src="settings.js"></script>
     <script src="renderer.js"></script>
     <script src="search.js"></script>
   </body>

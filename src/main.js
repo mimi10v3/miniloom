@@ -122,7 +122,7 @@ function openSettingsWindow(tabName = null) {
     },
   });
 
-  modal.loadFile("src/settings.html");
+  modal.loadFile("src/settings-modal.html");
   modal.once("ready-to-show", () => {
     modal.show();
     // Send the tab name to the settings window if provided

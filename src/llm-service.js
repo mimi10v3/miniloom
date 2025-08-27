@@ -1,5 +1,5 @@
-// Utility functions for API handling
-class APIUtils {
+// HTTP request utilities
+class HTTPClient {
   static async makeRequest(url, options) {
     const response = await fetch(url, {
       method: "POST",
@@ -39,58 +39,54 @@ class APIUtils {
   static delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
-
-  static extractThreeWords(text) {
-    return text.trim().split("\n")[0].split(" ").slice(0, 3).join(" ");
-  }
 }
 
-// API providers for different services
-class APIProviders {
+// API client implementations for different providers
+class APIClient {
   static async baseProvider(endpoint, prompt, params) {
-    return APIUtils.makeRequest(endpoint + "generate", {
+    return HTTPClient.makeRequest(endpoint + "generate", {
       body: {
         prompt: prompt,
         prompt_node: true,
         evaluationPrompt: "",
-        tokens_per_branch: params["tokens-per-branch"],
-        output_branches: params["output-branches"],
+        tokens_per_branch: params.tokensPerBranch,
+        output_branches: params.outputBranches,
       },
-    });
-  }
-
-  static async openaiChatProvider(endpoint, prompt, params) {
-    const headers = {
-      Authorization: `Bearer ${params["api-key"]}`,
-    };
-    const requestBody = {
-      messages: [{ role: "system", content: prompt }],
-      model: params["model-name"],
-      max_completion_tokens: params["tokens-per-branch"],
-      temperature: params["temperature"],
-      top_p: params["top-p"],
-    };
-
-    return APIUtils.makeRequest(endpoint, {
-      headers,
-      body: requestBody,
     });
   }
 
   static async openaiProvider(endpoint, prompt, params) {
     const headers = {
-      Authorization: `Bearer ${params["api-key"]}`,
+      Authorization: `Bearer ${params.apiKey}`,
     };
     const requestBody = {
-      model: params["model-name"],
+      model: params.modelName,
       prompt: prompt,
-      max_tokens: Number(params["tokens-per-branch"]),
-      n: Number(params["output-branches"]),
-      temperature: Number(params["temperature"]),
-      top_p: Number(params["top-p"]),
+      max_tokens: Number(params.tokensPerBranch),
+      n: Number(params.outputBranches),
+      temperature: Number(params.temperature),
+      top_p: Number(params.topP),
     };
 
-    return APIUtils.makeRequest(endpoint, {
+    return HTTPClient.makeRequest(endpoint, {
+      headers,
+      body: requestBody,
+    });
+  }
+
+  static async openaiChatProvider(endpoint, prompt, params) {
+    const headers = {
+      Authorization: `Bearer ${params.apiKey}`,
+    };
+    const requestBody = {
+      messages: [{ role: "system", content: prompt }],
+      model: params.modelName,
+      max_completion_tokens: params.tokensPerBranch,
+      temperature: params.temperature,
+      top_p: params.topP,
+    };
+
+    return HTTPClient.makeRequest(endpoint, {
       headers,
       body: requestBody,
     });
@@ -99,59 +95,59 @@ class APIProviders {
   static async anthropicProvider(endpoint, prompt, params) {
     const headers = {
       "Content-Type": "application/json",
-      "x-api-key": params["api-key"],
+      "x-api-key": params.apiKey,
       "anthropic-version": "2023-06-01",
     };
     const requestBody = {
-      model: params["model-name"],
+      model: params.modelName,
       messages: [{ role: "user", content: prompt }],
-      max_tokens: Number(params["tokens-per-branch"]),
-      temperature: Number(params["temperature"]),
-      top_p: Number(params["top-p"]),
+      max_tokens: Number(params.tokensPerBranch),
+      temperature: Number(params.temperature),
+      top_p: Number(params.topP),
     };
 
-    return APIUtils.makeRequest(endpoint, {
+    return HTTPClient.makeRequest(endpoint, {
       headers,
       body: requestBody,
     });
   }
 
-  static async togetherProvider(endpoint, prompt, params, api = "openai") {
-    const auth_token = `Bearer ${params["api-key"]}`;
-    const apiDelay = Number(params["delay"] || 0);
+  static async togetherProvider(endpoint, prompt, params, apiType = "openai") {
+    const authToken = `Bearer ${params.apiKey}`;
+    const apiDelay = Number(params.delay || 0);
 
     const batchPromises = [];
-    const calls = api === "openai" ? 1 : params["output-branches"];
+    const calls = apiType === "openai" ? 1 : params.outputBranches;
 
     for (let i = 1; i <= calls; i++) {
       const body = {
-        model: params["model-name"],
+        model: params.modelName,
         prompt: prompt,
-        max_tokens: Number(params["tokens-per-branch"]),
-        n: api === "openai" ? Number(params["output-branches"]) : 1,
-        temperature: Number(params["temperature"]),
-        top_p: Number(params["top-p"]),
-        top_k: Number(params["top-k"]),
-        repetition_penalty: Number(params["repetition-penalty"]),
+        max_tokens: Number(params.tokensPerBranch),
+        n: apiType === "openai" ? Number(params.outputBranches) : 1,
+        temperature: Number(params.temperature),
+        top_p: Number(params.topP),
+        top_k: Number(params.topK),
+        repetition_penalty: Number(params.repetitionPenalty),
       };
 
-      if (api === "openrouter") {
+      if (apiType === "openrouter") {
         body.provider = { require_parameters: true };
       }
 
-      const promise = APIUtils.delay(apiDelay * i)
+      const promise = HTTPClient.delay(apiDelay * i)
         .then(() =>
-          APIUtils.makeRequest(endpoint, {
+          HTTPClient.makeRequest(endpoint, {
             headers: {
               accept: "application/json",
-              Authorization: auth_token,
+              Authorization: authToken,
             },
             body,
           })
         )
         .then(responseJson => {
           const choices =
-            api === "openai" || api === "openrouter"
+            apiType === "openai" || apiType === "openrouter"
               ? responseJson.choices
               : responseJson.output.choices;
 
@@ -165,9 +161,7 @@ class APIProviders {
     }
 
     const batch = await Promise.all(batchPromises);
-    // For OpenAI, batch[0] is an array of choices, so we return it directly
-    // For other APIs, batch is an array of arrays, so we flatten it
-    return api === "openai" ? batch[0] : batch.flat();
+    return apiType === "openai" ? batch[0] : batch.flat();
   }
 }
 
@@ -177,7 +171,8 @@ class LLMService {
     this.callbacks = callbacks;
   }
 
-  prepareRollParams() {
+  // Configuration and parameter management
+  prepareGenerationParams() {
     const settings = this.callbacks.getSamplerSettings();
     const samplerSettingsStore = this.callbacks.getSamplerSettingsStore();
 
@@ -194,23 +189,24 @@ class LLMService {
 
     return {
       // Service parameters
-      "sampling-method": serviceData["sampling-method"] || "base",
-      "api-url": serviceData["service-api-url"] || "",
-      "model-name": serviceData["service-model-name"] || "",
-      "api-delay": parseInt(serviceData["service-api-delay"]) || 3000,
-      "api-key": apiKey,
+      samplingMethod: serviceData["sampling-method"] || "base",
+      apiUrl: serviceData["service-api-url"] || "",
+      modelName: serviceData["service-model-name"] || "",
+      apiDelay: parseInt(serviceData["service-api-delay"]) || 3000,
+      apiKey: apiKey,
 
       // Sampler parameters
-      "output-branches": parseInt(samplerData["output-branches"]) || 2,
-      "tokens-per-branch": parseInt(samplerData["tokens-per-branch"]) || 256,
+      outputBranches: parseInt(samplerData["output-branches"]) || 2,
+      tokensPerBranch: parseInt(samplerData["tokens-per-branch"]) || 256,
       temperature: parseFloat(samplerData["temperature"]) || 0.9,
-      "top-p": parseFloat(samplerData["top-p"]) || 1,
-      "top-k": parseInt(samplerData["top-k"]) || 100,
-      "repetition-penalty": parseFloat(samplerData["repetition-penalty"]) || 1,
+      topP: parseFloat(samplerData["top-p"]) || 1,
+      topK: parseInt(samplerData["top-k"]) || 100,
+      repetitionPenalty: parseFloat(samplerData["repetition-penalty"]) || 1,
     };
   }
 
-  async getResponses(
+  // Core generation methods
+  async generateResponses(
     endpoint,
     {
       prompt,
@@ -229,28 +225,27 @@ class LLMService {
     const params = {
       prompt: prompt,
       prompt_node: includePrompt,
-      tokens_per_branch: weaveParams["tokens_per_branch"],
-      output_branches: weaveParams["output_branches"],
+      tokens_per_branch: weaveParams.tokens_per_branch,
+      output_branches: weaveParams.output_branches,
     };
 
-    return APIUtils.makeRequest(finalEndpoint, { body: params });
+    return HTTPClient.makeRequest(finalEndpoint, { body: params });
   }
 
-  async getSummary(taskText) {
-    // Safety check for undefined or null taskText
+  async generateSummary(taskText) {
     if (!taskText || typeof taskText !== "string") {
-      console.warn("getSummary called with invalid taskText:", taskText);
+      console.warn("generateSummary called with invalid taskText:", taskText);
       return "Summary Not Available";
     }
 
-    const params = this.prepareRollParams();
-    const endpoint = params["api-url"];
+    const params = this.prepareGenerationParams();
+    const endpoint = params.apiUrl;
 
     const summarizePromptTemplate =
       await window.electronAPI.readPromptFile("summarize.txt");
     const summarizePrompt = summarizePromptTemplate.replace(
       "{MODEL_NAME}",
-      params["model-name"]
+      params.modelName
     );
 
     // Limit context to 8 * 512 characters (average word length * word count)
@@ -260,7 +255,7 @@ class LLMService {
       taskText.slice(-4096) +
       "\n</tasktext>\n\nThree Words:";
 
-    const samplingMethod = params["sampling-method"];
+    const samplingMethod = params.samplingMethod;
 
     if (
       ["together", "openrouter", "openai", "openai-chat"].includes(
@@ -268,261 +263,177 @@ class LLMService {
       )
     ) {
       if (samplingMethod === "openai-chat") {
-        const response = await APIProviders.openaiChatProvider(
-          endpoint,
-          prompt,
-          {
-            ...params,
-            "tokens-per-branch": 10,
-            "output-branches": 1,
-          }
-        );
+        const response = await APIClient.openaiChatProvider(endpoint, prompt, {
+          ...params,
+          tokensPerBranch: 10,
+          outputBranches: 1,
+        });
 
         const text = response.choices[0].message.content;
-        return APIUtils.extractThreeWords(text);
+        return window.utils.extractThreeWords(text);
       } else if (samplingMethod === "openai") {
-        // Use openaiProvider for OpenAI completions
         const openaiParams = {
-          "api-key": params["api-key"],
-          "output-branches": 1,
-          "model-name": params["model-name"],
-          "tokens-per-branch": 10,
-          temperature: params["temperature"],
-          "top-p": params["top-p"],
+          apiKey: params.apiKey,
+          outputBranches: 1,
+          modelName: params.modelName,
+          tokensPerBranch: 10,
+          temperature: params.temperature,
+          topP: params.topP,
         };
 
-        const responseData = await APIProviders.openaiProvider(
+        const responseData = await APIClient.openaiProvider(
           endpoint,
           prompt,
           openaiParams
         );
 
-        return APIUtils.extractThreeWords(responseData.choices[0].text);
+        return window.utils.extractThreeWords(responseData.choices[0].text);
       } else {
         const togetherParams = {
-          "api-key": params["api-key"],
-          "output-branches": 1,
-          "model-name": params["model-name"],
-          "tokens-per-branch": 10,
-          temperature: params["temperature"],
-          "top-p": params["top-p"],
-          "top-k": params["top-k"],
-          repetition_penalty: params["repetition-penalty"],
+          apiKey: params.apiKey,
+          outputBranches: 1,
+          modelName: params.modelName,
+          tokensPerBranch: 10,
+          temperature: params.temperature,
+          topP: params.topP,
+          topK: params.topK,
+          repetitionPenalty: params.repetitionPenalty,
         };
 
-        const batch = await APIProviders.togetherProvider(
+        const batch = await APIClient.togetherProvider(
           endpoint,
           prompt,
           togetherParams,
           samplingMethod
         );
 
-        return APIUtils.extractThreeWords(batch[0].text);
+        return window.utils.extractThreeWords(batch[0].text);
       }
     } else {
-      const response = await APIProviders.baseProvider(endpoint, prompt, {
-        "tokens-per-branch": 10,
-        "output-branches": 1,
+      const response = await APIClient.baseProvider(endpoint, prompt, {
+        tokensPerBranch: 10,
+        outputBranches: 1,
       });
 
-      return APIUtils.extractThreeWords(response[1].text);
+      return window.utils.extractThreeWords(response[1].text);
     }
   }
 
-  async reroll(id) {
-    const params = this.prepareRollParams();
-    const samplingMethod = params["sampling-method"];
+  // Main generation entry point
+  async generateNewResponses(nodeId) {
+    const params = this.prepareGenerationParams();
+    const samplingMethod = params.samplingMethod;
 
     const methodMap = {
-      base: () => this.togetherRoll(id, "base"),
-      "vae-guided": () => this.togetherRoll(id, "base"), // fallback to base
-      together: () => this.togetherRoll(id, "together"),
-      openrouter: () => this.togetherRoll(id, "openrouter"),
-      openai: () => this.openaiRoll(id),
-      "openai-chat": () => this.openaiChatCompletionsRoll(id),
-      anthropic: () => this.anthropicRoll(id),
+      base: () => this.generateWithTogether(nodeId, "base"),
+      together: () => this.generateWithTogether(nodeId, "together"),
+      openrouter: () => this.generateWithTogether(nodeId, "openrouter"),
+      openai: () => this.generateWithOpenAI(nodeId),
+      "openai-chat": () => this.generateWithOpenAIChat(nodeId),
+      anthropic: () => this.generateWithAnthropic(nodeId),
     };
 
     const method = methodMap[samplingMethod] || methodMap["base"];
     await method();
   }
 
-  async togetherRoll(id, api = "openai") {
-    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
-
-    try {
-      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-      if (this.callbacks.updateFocusSummary)
-        await this.callbacks.updateFocusSummary();
-
-      const loomTree = this.callbacks.getLoomTree();
-      const rollFocus = loomTree.nodeStore[id];
-      const lastChildIndex =
-        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-
+  // Generation implementation methods
+  async generateWithTogether(nodeId, apiType = "openai") {
+    await this.executeGeneration(nodeId, async () => {
+      const params = this.prepareGenerationParams();
       const prompt = this.callbacks.getEditor().value;
-      const params = this.prepareRollParams();
 
       const togetherParams = {
-        "api-key": params["api-key"],
-        "model-name": params["model-name"],
-        "output-branches": params["output-branches"],
-        "tokens-per-branch": params["tokens-per-branch"],
-        temperature: params["temperature"],
-        "top-p": params["top-p"],
-        "top-k": params["top-k"],
-        repetition_penalty: params["repetition-penalty"],
-        delay: params["api-delay"],
+        apiKey: params.apiKey,
+        modelName: params.modelName,
+        outputBranches: params.outputBranches,
+        tokensPerBranch: params.tokensPerBranch,
+        temperature: params.temperature,
+        topP: params.topP,
+        topK: params.topK,
+        repetitionPenalty: params.repetitionPenalty,
+        delay: params.apiDelay,
       };
 
-      const newResponses = await APIProviders.togetherProvider(
-        params["api-url"],
+      const newResponses = await APIClient.togetherProvider(
+        params.apiUrl,
         prompt,
         togetherParams,
-        api
+        apiType
       );
 
-      await this.processResponses(
-        newResponses,
-        rollFocus,
-        lastChildIndex,
-        params["api-delay"]
-      );
-    } catch (error) {
-      if (this.callbacks.showError) this.callbacks.showError(error.message);
-      throw error;
-    } finally {
-      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
-      if (this.callbacks.renderTick) this.callbacks.renderTick();
-    }
+      return newResponses;
+    });
   }
 
-  async anthropicRoll(id) {
-    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
-
-    try {
-      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-      if (this.callbacks.updateFocusSummary)
-        await this.callbacks.updateFocusSummary();
-
-      const loomTree = this.callbacks.getLoomTree();
-      const rollFocus = loomTree.nodeStore[id];
-      const lastChildIndex =
-        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-
+  async generateWithAnthropic(nodeId) {
+    await this.executeGeneration(nodeId, async () => {
+      const params = this.prepareGenerationParams();
       const prompt = this.callbacks.getEditor().value;
-      const params = this.prepareRollParams();
 
       const anthropicParams = {
-        "api-key": params["api-key"],
-        "model-name": params["model-name"],
-        "output-branches": params["output-branches"],
-        "tokens-per-branch": params["tokens-per-branch"],
-        temperature: params["temperature"],
-        "top-p": params["top-p"],
+        apiKey: params.apiKey,
+        modelName: params.modelName,
+        outputBranches: params.outputBranches,
+        tokensPerBranch: params.tokensPerBranch,
+        temperature: params.temperature,
+        topP: params.topP,
       };
 
-      const responseData = await APIProviders.anthropicProvider(
-        params["api-url"],
+      const responseData = await APIClient.anthropicProvider(
+        params.apiUrl,
         prompt,
         anthropicParams
       );
 
-      // Anthropic returns a single response, not multiple choices like OpenAI
-      const newResponses = [
+      return [
         {
           text: responseData.content[0].text,
           model: responseData.model,
         },
       ];
-
-      await this.processResponses(
-        newResponses,
-        rollFocus,
-        lastChildIndex,
-        params["api-delay"]
-      );
-    } catch (error) {
-      if (this.callbacks.showError) this.callbacks.showError(error.message);
-      throw error;
-    } finally {
-      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
-      if (this.callbacks.renderTick) this.callbacks.renderTick();
-    }
+    });
   }
 
-  async openaiRoll(id) {
-    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
-
-    try {
-      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-      if (this.callbacks.updateFocusSummary)
-        await this.callbacks.updateFocusSummary();
-
-      const loomTree = this.callbacks.getLoomTree();
-      const rollFocus = loomTree.nodeStore[id];
-      const lastChildIndex =
-        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
-
+  async generateWithOpenAI(nodeId) {
+    await this.executeGeneration(nodeId, async () => {
+      const params = this.prepareGenerationParams();
       const prompt = this.callbacks.getEditor().value;
-      const params = this.prepareRollParams();
 
       const openaiParams = {
-        "api-key": params["api-key"],
-        "model-name": params["model-name"],
-        "output-branches": params["output-branches"],
-        "tokens-per-branch": params["tokens-per-branch"],
-        temperature: params["temperature"],
-        "top-p": params["top-p"],
+        apiKey: params.apiKey,
+        modelName: params.modelName,
+        outputBranches: params.outputBranches,
+        tokensPerBranch: params.tokensPerBranch,
+        temperature: params.temperature,
+        topP: params.topP,
       };
 
-      const responseData = await APIProviders.openaiProvider(
-        params["api-url"],
+      const responseData = await APIClient.openaiProvider(
+        params.apiUrl,
         prompt,
         openaiParams
       );
 
-      const newResponses = responseData.choices.map(choice => ({
+      return responseData.choices.map(choice => ({
         text: choice.text,
         model: responseData.model,
       }));
-
-      await this.processResponses(
-        newResponses,
-        rollFocus,
-        lastChildIndex,
-        params["api-delay"]
-      );
-    } catch (error) {
-      if (this.callbacks.showError) this.callbacks.showError(error.message);
-      throw error;
-    } finally {
-      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
-      if (this.callbacks.renderTick) this.callbacks.renderTick();
-    }
+    });
   }
 
-  async openaiChatCompletionsRoll(id) {
-    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
-
-    try {
-      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-      if (this.callbacks.updateFocusSummary)
-        await this.callbacks.updateFocusSummary();
-
+  async generateWithOpenAIChat(nodeId) {
+    await this.executeGeneration(nodeId, async () => {
+      const params = this.prepareGenerationParams();
       const loomTree = this.callbacks.getLoomTree();
-      const rollFocus = loomTree.nodeStore[id];
-      const lastChildIndex =
-        rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
+      const rollFocus = loomTree.nodeStore[nodeId];
       const promptText = loomTree.renderNode(rollFocus);
-      const params = this.prepareRollParams();
 
       const chatData = this.parseChatData(promptText);
-
       const requestBody = this.buildChatRequestBody(chatData, params);
       const headers = this.buildChatRequestHeaders(params);
 
-      const responseData = await APIUtils.makeRequest(params["api-url"], {
+      const responseData = await HTTPClient.makeRequest(params.apiUrl, {
         headers,
         body: requestBody,
       });
@@ -531,47 +442,96 @@ class LLMService {
         responseData,
         chatData,
         rollFocus,
-        lastChildIndex
+        this.getLastChildIndex(rollFocus)
       );
-    } catch (error) {
-      if (this.callbacks.showError) this.callbacks.showError(error.message);
-      return;
-    } finally {
-      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
-      if (this.callbacks.renderTick) this.callbacks.renderTick();
-    }
+
+      return []; // Chat responses are processed separately
+    });
   }
 
-  parseChatData(promptText) {
+  // Common generation execution pattern
+  async executeGeneration(nodeId, generationFunction) {
+    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
+
+    const loomTree = this.callbacks.getLoomTree();
+    loomTree.setNodeGenerationPending(nodeId, true);
+    loomTree.clearNodeError(nodeId);
+
     try {
-      const chatData = JSON.parse(promptText);
-      if (!chatData.messages || !Array.isArray(chatData.messages)) {
-        throw new Error("Invalid chat format: messages array not found");
+      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
+      if (this.callbacks.updateFocusSummary)
+        await this.callbacks.updateFocusSummary();
+
+      const rollFocus = loomTree.nodeStore[nodeId];
+      const lastChildIndex = this.getLastChildIndex(rollFocus);
+
+      const newResponses = await generationFunction();
+
+      if (newResponses.length > 0) {
+        await this.processResponses(
+          newResponses,
+          rollFocus,
+          lastChildIndex,
+          this.prepareGenerationParams().apiDelay
+        );
       }
-      return chatData;
-    } catch (jsonError) {
-      return {
-        messages: [{ role: "user", content: promptText.trim() }],
-      };
+    } catch (error) {
+      const loomTree = this.callbacks.getLoomTree();
+      loomTree.setNodeError(nodeId, error.message);
+
+      if (this.callbacks.showError) this.callbacks.showError(error.message);
+      throw error;
+    } finally {
+      const loomTree = this.callbacks.getLoomTree();
+      loomTree.setNodeGenerationPending(nodeId, false);
+
+      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
     }
   }
 
-  buildChatRequestBody(chatData, params) {
-    return {
-      model: params["model-name"],
-      messages: chatData.messages,
-      max_completion_tokens: parseInt(params["tokens-per-branch"]),
-      temperature: parseFloat(params["temperature"]),
-      top_p: parseFloat(params["top-p"]),
-      n: parseInt(params["output-branches"]),
-    };
-  }
+  // Response processing
+  async processResponses(newResponses, rollFocus, lastChildIndex, apiDelay) {
+    const loomTree = this.callbacks.getLoomTree();
 
-  buildChatRequestHeaders(params) {
-    return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${params["api-key"]}`,
-    };
+    if (!Array.isArray(newResponses) || newResponses.length === 0) {
+      console.warn(
+        "processResponses called with invalid responses:",
+        newResponses
+      );
+      return;
+    }
+
+    loomTree.clearNodeError(rollFocus.id);
+
+    for (const response of newResponses) {
+      if (!response || typeof response.text !== "string") {
+        console.warn("Invalid response object:", response);
+        continue;
+      }
+
+      const responseSummary = await HTTPClient.delay(apiDelay).then(() => {
+        return this.generateSummary(response.text);
+      });
+
+      const childText = loomTree.renderNode(rollFocus) + response.text;
+      const responseNode = loomTree.createNode(
+        "gen",
+        rollFocus,
+        childText,
+        responseSummary
+      );
+
+      this.callbacks.updateNodeMetadata(responseNode.id, {
+        model: response.model,
+      });
+    }
+
+    // Update tree view to show new badges
+    if (this.callbacks.updateTreeView) {
+      this.callbacks.updateTreeView();
+    }
+
+    this.updateFocus(rollFocus, lastChildIndex);
   }
 
   async processChatResponses(
@@ -582,6 +542,8 @@ class LLMService {
   ) {
     const loomTree = this.callbacks.getLoomTree();
 
+    loomTree.clearNodeError(rollFocus.id);
+
     for (const choice of responseData.choices) {
       const assistantMessage = choice.message;
       const newChatData = JSON.parse(JSON.stringify(chatData));
@@ -591,7 +553,7 @@ class LLMService {
       });
 
       const newChatText = JSON.stringify(newChatData, null, 2);
-      const summary = await this.getSummary(
+      const summary = await this.generateSummary(
         assistantMessage.content || "Assistant response"
       );
 
@@ -608,46 +570,50 @@ class LLMService {
       });
     }
 
+    // Update tree view to show new badges
+    if (this.callbacks.updateTreeView) {
+      this.callbacks.updateTreeView();
+    }
+
     this.updateFocus(rollFocus, lastChildIndex);
   }
 
-  async processResponses(newResponses, rollFocus, lastChildIndex, apiDelay) {
-    const loomTree = this.callbacks.getLoomTree();
-
-    // Safety check for valid responses
-    if (!Array.isArray(newResponses) || newResponses.length === 0) {
-      console.warn(
-        "processResponses called with invalid responses:",
-        newResponses
-      );
-      return;
-    }
-
-    for (const response of newResponses) {
-      // Safety check for valid response object
-      if (!response || typeof response.text !== "string") {
-        console.warn("Invalid response object:", response);
-        continue;
+  // Chat-specific utilities
+  parseChatData(promptText) {
+    try {
+      const chatData = JSON.parse(promptText);
+      if (!chatData.messages || !Array.isArray(chatData.messages)) {
+        throw new Error("Invalid chat format: messages array not found");
       }
-
-      const responseSummary = await APIUtils.delay(apiDelay).then(() => {
-        return this.getSummary(response.text);
-      });
-
-      const childText = loomTree.renderNode(rollFocus) + response.text;
-      const responseNode = loomTree.createNode(
-        "gen",
-        rollFocus,
-        childText,
-        responseSummary
-      );
-
-      this.callbacks.updateNodeMetadata(responseNode.id, {
-        model: response.model,
-      });
+      return chatData;
+    } catch (jsonError) {
+      return {
+        messages: [{ role: "user", content: promptText.trim() }],
+      };
     }
+  }
 
-    this.updateFocus(rollFocus, lastChildIndex);
+  buildChatRequestBody(chatData, params) {
+    return {
+      model: params.modelName,
+      messages: chatData.messages,
+      max_completion_tokens: parseInt(params.tokensPerBranch),
+      temperature: parseFloat(params.temperature),
+      top_p: parseFloat(params.topP),
+      n: parseInt(params.outputBranches),
+    };
+  }
+
+  buildChatRequestHeaders(params) {
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.apiKey}`,
+    };
+  }
+
+  // Utility methods
+  getLastChildIndex(rollFocus) {
+    return rollFocus.children.length > 0 ? rollFocus.children.length - 1 : null;
   }
 
   updateFocus(rollFocus, lastChildIndex) {
@@ -666,5 +632,4 @@ class LLMService {
   }
 }
 
-// Export the LLMService class
 window.LLMService = LLMService;

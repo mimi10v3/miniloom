@@ -105,13 +105,13 @@ function escapeRegex(string) {
 /**
  * Format a timestamp for display
  * @param {number} timestamp - Unix timestamp
- * @returns {string} - Formatted date string
+ * @returns {string} - Formatted date string in "d MMM yy HH:mm" format
  */
 function formatTimestamp(timestamp) {
-  return new Date(timestamp).toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
+  return new Date(timestamp).toLocaleString("en-GB", {
     day: "numeric",
+    month: "short",
+    year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -128,21 +128,72 @@ function truncateText(text, maxLength) {
   return text.substring(0, maxLength) + "...";
 }
 
-// Export functions for use in other modules
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    validateFieldStringType,
-    isValidUrl,
-    countCharacters,
-    countWords,
-    highlightText,
-    escapeRegex,
-    formatTimestamp,
-    truncateText,
+/**
+ * Extract the first three words from the first line of text
+ * @param {string} text - The text to extract words from
+ * @returns {string} - First three words joined by spaces
+ */
+function extractThreeWords(text) {
+  return text.trim().split("\n")[0].split(" ").slice(0, 3).join(" ");
+}
+
+/**
+ * Calculate comprehensive text statistics for a given text
+ * @param {string} text - The text to analyze
+ * @returns {Object} - Object containing wordCount, charCount, and other stats
+ */
+function calculateTextStats(text) {
+  const trimmedText = text.trim();
+  const wordCount =
+    trimmedText.length === 0 ? 0 : trimmedText.split(/\s+/).length;
+  const charCount = text.length;
+
+  return {
+    wordCount,
+    charCount,
+    isEmpty: trimmedText.length === 0,
+    lineCount: text.split("\n").length,
+    averageWordsPerLine: wordCount / Math.max(1, text.split("\n").length),
   };
 }
 
-// Create a single utils namespace to avoid global pollution
+/**
+ * Calculate net changes between two texts
+ * @param {string} currentText - The current text
+ * @param {string} previousText - The previous text to compare against
+ * @returns {Object} - Object containing net word and character changes
+ */
+function calculateNetChanges(currentText, previousText) {
+  const currentStats = calculateTextStats(currentText);
+  const previousStats = calculateTextStats(previousText);
+
+  return {
+    netWordsChange: currentStats.wordCount - previousStats.wordCount,
+    netCharsChange: currentStats.charCount - previousStats.charCount,
+    netLinesChange: currentStats.lineCount - previousStats.lineCount,
+  };
+}
+
+/**
+ * Format net change for display with +/- prefix
+ * @param {number} change - The net change value
+ * @returns {string} - Formatted string with +/- prefix
+ */
+function formatNetChange(change) {
+  return `${change > 0 ? "+" : ""}${change}`;
+}
+
+/**
+ * Get CSS class for net change styling
+ * @param {number} change - The net change value
+ * @returns {string} - CSS class name for styling
+ */
+function getNetChangeClass(change) {
+  if (change > 0) return "positive";
+  if (change < 0) return "negative";
+  return "";
+}
+
 if (typeof window !== "undefined") {
   window.utils = {
     validateFieldStringType,
@@ -153,5 +204,10 @@ if (typeof window !== "undefined") {
     escapeRegex,
     formatTimestamp,
     truncateText,
+    extractThreeWords,
+    calculateTextStats,
+    calculateNetChanges,
+    formatNetChange,
+    getNetChangeClass,
   };
 }

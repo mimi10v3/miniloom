@@ -19,7 +19,7 @@ class SearchManager {
 
     // DOM elements
     this.searchInput = document.getElementById("search-input");
-    this.suggestionsContainer = document.getElementById("search-suggestions");
+    this.searchClearButton = document.getElementById("search-clear");
     this.searchContainer = document.getElementById("search-container");
     this.noResultsElement = document.getElementById("search-no-results");
     this.resultsContainer = document.getElementById("search-results-container");
@@ -158,22 +158,6 @@ class SearchManager {
     }
   }
 
-  getSearchSuggestions(query) {
-    if (!query.trim()) {
-      return [];
-    }
-
-    try {
-      return window.electronAPI.searchIndexAutoSuggest(query, {
-        fuzzy: 0.3,
-        prefix: true,
-      });
-    } catch (error) {
-      console.warn("Suggestion error:", error);
-      return [];
-    }
-  }
-
   renderSearchResults(query) {
     const results = this.performSearch(query);
 
@@ -199,9 +183,7 @@ class SearchManager {
 
       const header = document.createElement("div");
       header.className = "search-result-header";
-      header.innerHTML = `${result.node.type.toUpperCase()} - ${
-        result.highlightedSummary || result.node.summary
-      }`;
+      header.innerHTML = `📍 ${result.node.id}: ${result.highlightedSummary || result.node.summary}`;
 
       const content = document.createElement("div");
       content.className = "search-result-content";
@@ -214,9 +196,41 @@ class SearchManager {
       meta.className = "search-result-meta";
       const formattedDate = window.utils.formatTimestamp(result.node.timestamp);
 
+      // Get author info
+      const authorEmoji = result.node.type === "gen" ? "🤖" : "👤";
+      const authorName =
+        result.node.type === "user" ? "Human" : result.node.model || "Unknown";
+
+      // Add rating indicators
+      let ratingHtml = "";
+      if (result.node.rating === true) {
+        ratingHtml =
+          '<span style="color: #28a745; font-size: 1.1em;">👍</span>';
+      } else if (result.node.rating === false) {
+        ratingHtml =
+          '<span style="color: #dc3545; font-size: 1.1em;">👎</span>';
+      }
+
+      // Add subtree stats (using pre-calculated values)
+      let subtreeHtml = "";
+      if (result.node.children && result.node.children.length > 0) {
+        const totalNodes = result.node.treeStats.totalChildNodes + 1; // +1 to include the node itself
+        subtreeHtml = ` | 🍃 ${result.node.children.length}/${totalNodes}`;
+      }
+
+      // Build the metadata line with proper separators
+      let metadataLine = `🕐 ${formattedDate} | 📏 ${result.node.depth}`;
+      if (ratingHtml) {
+        metadataLine += ` | ${ratingHtml}`;
+      }
+      if (subtreeHtml) {
+        metadataLine += subtreeHtml;
+      }
+
       meta.innerHTML = `
-        <div>Score: ${result.score.toFixed(3)} | ID: ${result.node.id}</div>
-        <div class="search-result-date">${formattedDate}</div>
+        <div>${authorEmoji} ${authorName}</div>
+        <div>${metadataLine}</div>
+        <div class="search-result-date">Score: ${result.score.toFixed(3)}</div>
       `;
 
       resultItem.appendChild(header);
@@ -233,50 +247,6 @@ class SearchManager {
     });
   }
 
-  showSuggestions(query, container) {
-    if (!query.trim()) {
-      this.hideSuggestions(container);
-      return;
-    }
-
-    const suggestions = this.getSearchSuggestions(query);
-    if (suggestions.length === 0) {
-      this.hideSuggestions(container);
-      return;
-    }
-
-    container.innerHTML = "";
-    suggestions.slice(0, 5).forEach(suggestion => {
-      const item = document.createElement("div");
-      item.className = "search-suggestion";
-      item.textContent = suggestion.suggestion;
-
-      item.addEventListener("click", () => {
-        this.searchInput.value = suggestion.suggestion;
-        this.searchInput.dispatchEvent(new Event("input"));
-        this.hideSuggestions(container);
-      });
-
-      container.appendChild(item);
-    });
-
-    container.style.display = "block";
-  }
-
-  hideSuggestions(container) {
-    container.style.display = "none";
-  }
-
-  updateSuggestionHighlight(suggestions, index) {
-    suggestions.forEach((item, i) => {
-      if (i === index) {
-        item.classList.add("search-suggestion-highlighted");
-      } else {
-        item.classList.remove("search-suggestion-highlighted");
-      }
-    });
-  }
-
   clearSearchState() {
     this.currentSearchQuery = "";
     this.searchResultsMode = false;
@@ -286,12 +256,10 @@ class SearchManager {
     }
     if (this.noResultsElement) this.noResultsElement.style.display = "none";
     if (this.resultsContainer) this.resultsContainer.style.display = "none";
-    if (this.suggestionsContainer)
-      this.hideSuggestions(this.suggestionsContainer);
   }
 
   initializeSearchInput() {
-    if (!this.searchInput || !this.suggestionsContainer) {
+    if (!this.searchInput || !this.searchClearButton) {
       console.warn("Search elements not found in DOM");
       return;
     }
@@ -302,13 +270,15 @@ class SearchManager {
       clearTimeout(searchTimeout);
       const query = e.target.value;
 
+      // Show/hide clear button based on input content
+      this.searchClearButton.style.display = query.trim() ? "block" : "none";
+
       searchTimeout = setTimeout(() => {
         this.currentSearchQuery = query;
         this.searchResultsMode = query.trim().length > 0;
 
         if (this.searchResultsMode) {
           this.renderSearchResults(query);
-          this.showSuggestions(query, this.suggestionsContainer);
         } else {
           this.clearSearchState();
           if (this.onNodeFocus && this.getFocusId) {
@@ -318,43 +288,31 @@ class SearchManager {
       }, 200);
     });
 
-    // Handle keyboard navigation
-    let suggestionIndex = -1;
-    this.searchInput.addEventListener("keydown", e => {
-      const suggestions =
-        this.suggestionsContainer.querySelectorAll(".search-suggestion");
+    // Handle clear button click
+    this.searchClearButton.addEventListener("click", () => {
+      this.searchInput.value = "";
+      this.searchClearButton.style.display = "none";
+      this.clearSearchState();
+      if (this.onNodeFocus && this.getFocusId) {
+        this.onNodeFocus(this.getFocusId());
+      }
+    });
 
+    // Handle keyboard navigation
+    this.searchInput.addEventListener("keydown", e => {
       if (e.key === "Escape") {
         e.target.value = "";
+        this.searchClearButton.style.display = "none";
         this.clearSearchState();
         if (this.onNodeFocus && this.getFocusId) {
           this.onNodeFocus(this.getFocusId());
         }
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        suggestionIndex = Math.min(suggestionIndex + 1, suggestions.length - 1);
-        this.updateSuggestionHighlight(suggestions, suggestionIndex);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        suggestionIndex = Math.max(suggestionIndex - 1, -1);
-        this.updateSuggestionHighlight(suggestions, suggestionIndex);
-      } else if (e.key === "Enter" && suggestionIndex >= 0) {
-        e.preventDefault();
-        const selectedSuggestion = suggestions[suggestionIndex];
-        if (selectedSuggestion) {
-          this.searchInput.value = selectedSuggestion.textContent;
-          this.searchInput.dispatchEvent(new Event("input"));
-          this.hideSuggestions(this.suggestionsContainer);
-        }
       }
     });
 
-    // Hide suggestions when clicking outside
+    // Clear search and restore tree view when clicking outside
     document.addEventListener("click", e => {
       if (this.searchContainer && !this.searchContainer.contains(e.target)) {
-        this.hideSuggestions(this.suggestionsContainer);
-
-        // Clear search and restore tree view when clicking outside
         if (this.searchResultsMode) {
           this.clearSearchState();
           if (this.onNodeFocus && this.getFocusId) {

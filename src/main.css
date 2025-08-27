@@ -579,3 +579,151 @@ table.keys td:nth-child(2) {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   Tree Navigation Status Indicators
+   ========================================================================== */
+
+.node-status {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 12px;
+  line-height: 1;
+  transition: all var(--transition-normal);
+}
+
+.node-status.status-error {
+  color: var(--error);
+  animation: pulse 2s infinite;
+}
+
+.node-status.status-pending {
+  color: var(--warning);
+  animation: spin 1s linear infinite;
+}
+
+.node-status.status-unread {
+  color: var(--unread-indicator);
+  font-weight: var(--font-weight-bold);
+}
+
+.node-status.status-normal {
+  color: transparent;
+}
+
+/* ==========================================================================
+   Node Rating Indicators
+   ========================================================================== */
+
+.node-rating {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 12px;
+  line-height: 1;
+  transition: all var(--transition-normal);
+}
+
+.node-rating.rating-star {
+  color: #ffd700;
+  font-weight: var(--font-weight-medium);
+}
+
+.node-rating.rating-no {
+  color: var(--error);
+  font-weight: var(--font-weight-medium);
+}
+
+.node-rating.rating-none {
+  color: transparent;
+}
+
+/* ==========================================================================
+   Hidden Parents Indicator
+   ========================================================================== */
+
+.hidden-parents-indicator {
+  display: block;
+  margin: 4px 0;
+  padding: 6px 8px;
+  background-color: rgba(213, 4, 2, 0.05);
+  border: 1px solid rgba(213, 4, 2, 0.15);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-normal);
+  border-left: 3px solid rgba(213, 4, 2, 0.3);
+}
+
+.hidden-parents-indicator:hover {
+  background-color: rgba(213, 4, 2, 0.08);
+  border-color: rgba(213, 4, 2, 0.25);
+  transform: translateX(1px);
+}
+
+.hidden-parents-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hidden-parents-link:hover {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* ==========================================================================
+   Compressed Children Indicator
+   ========================================================================== */
+
+.compressed-children-indicator {
+  display: block;
+  margin: 0;
+  padding: 2px 6px;
+  background-color: transparent;
+  border: none;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.8;
+  transition: all var(--transition-normal);
+}
+
+.compressed-children-indicator:hover {
+  opacity: 1;
+}
+
+.compressed-children-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition-normal);
+}
+
+.compressed-children-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+/* Remove blue styling from compressed children when parent is downvoted */
+.downvoted .compressed-children-indicator {
+  background-color: transparent;
+  border: none;
+  border-left: none;
+}
+
+.downvoted .compressed-children-link {
+  color: var(--text-muted);
+}
+
+.downvoted .compressed-children-link:hover {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+
