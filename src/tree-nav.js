@@ -1,17 +1,29 @@
 class TreeNav {
-  constructor(onNodeClick, callbacks = {}) {
+  constructor(onNodeClick, { getLoomTree, getFocus } = {}) {
+    this.onNodeClick = onNodeClick;
+    this.getLoomTree = getLoomTree;
+    this.getFocus = getFocus;
+
+    // Initialize when DOM is ready
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => this.init());
+    } else {
+      this.init();
+    }
+  }
+
+  init() {
+    // DOM elements
     this.loomTreeView = document.getElementById("loom-tree-view");
     if (!this.loomTreeView) {
       throw new Error("loom-tree-view element not found");
     }
-    this.onNodeClick = onNodeClick;
-    this.callbacks = callbacks;
   }
 
   renderTree(node, container) {
     const parentIds = [];
     const hiddenParentIds = [];
-    const loomTree = this.callbacks.getLoomTree();
+    const loomTree = this.getLoomTree();
 
     // Move up 2 parents to show context around the focused node
     for (let i = 0; i < 2; i++) {
@@ -24,7 +36,7 @@ class TreeNav {
 
     // Find all hidden parents above the current node
     // Walk up from the original focused node to find all parents not in parentIds
-    const originalFocus = this.callbacks.getFocus();
+    const originalFocus = this.getFocus();
     let currentNode = originalFocus;
     while (currentNode.parent !== null) {
       const parent = loomTree.nodeStore[currentNode.parent];
@@ -64,8 +76,8 @@ class TreeNav {
     }
 
     const childrenUl = document.createElement("ul");
-    const loomTree = this.callbacks.getLoomTree();
-    const currentFocus = this.callbacks.getFocus();
+    const loomTree = this.getLoomTree();
+    const currentFocus = this.getFocus();
 
     // Check if this node should be compressed (downvoted and not focused/parent)
     const shouldCompress =
@@ -108,7 +120,7 @@ class TreeNav {
 
   createNodeSpan(node, parentIds, isMaxDepth) {
     const nodeSpan = document.createElement("span");
-    const currentFocus = this.callbacks.getFocus();
+    const currentFocus = this.getFocus();
 
     // Set focused node ID
     if (node.id === currentFocus.id) {
@@ -311,7 +323,7 @@ class TreeNav {
 
   updateTreeView() {
     this.loomTreeView.innerHTML = "";
-    const currentFocus = this.callbacks.getFocus();
+    const currentFocus = this.getFocus();
     this.renderTree(currentFocus, this.loomTreeView);
   }
 
@@ -328,7 +340,7 @@ class TreeNav {
   }
 
   expandHiddenParents(hiddenParentIds, indicatorLi) {
-    const loomTree = this.callbacks.getLoomTree();
+    const loomTree = this.getLoomTree();
 
     // Create a container for the expanded parents
     const expandedContainer = document.createElement("div");

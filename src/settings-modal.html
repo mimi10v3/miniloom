@@ -39,6 +39,7 @@
         margin: 0;
         height: 48px;
         align-items: center;
+        position: relative;
       }
 
       .tab-btn {
@@ -363,6 +364,15 @@
 
       #favorites-tab table.keys input::placeholder {
         color: var(--text-muted);
+      }
+
+      /* Close button positioning for settings modal */
+      #settings-tabs .close-btn {
+        position: absolute;
+        top: 50%;
+        right: var(--spacing-md);
+        transform: translateY(-50%);
+        z-index: 10;
       }
 
       /* Welcome message styling */

@@ -1,28 +1,13 @@
 class SearchManager {
-  constructor({
-    getLoomTree,
-    getFocus,
-    onNodeFocus,
-    getFocusId,
-    treeNav = null,
-  } = {}) {
+  constructor({ focusOnNode, loomTree, treeNav } = {}) {
     // Private state
     this.searchResultsMode = false;
     this.currentSearchQuery = "";
 
     // Required dependencies
-    this.getLoomTree = getLoomTree;
-    this.getFocus = getFocus;
-    this.onNodeFocus = onNodeFocus;
-    this.getFocusId = getFocusId;
+    this.focusOnNode = focusOnNode;
+    this.loomTree = loomTree;
     this.treeNav = treeNav;
-
-    // DOM elements
-    this.searchInput = document.getElementById("search-input");
-    this.searchClearButton = document.getElementById("search-clear");
-    this.searchContainer = document.getElementById("search-container");
-    this.noResultsElement = document.getElementById("search-no-results");
-    this.resultsContainer = document.getElementById("search-results-container");
 
     // Initialize when DOM is ready
     if (document.readyState === "loading") {
@@ -33,13 +18,18 @@ class SearchManager {
   }
 
   init() {
-    if (this.getLoomTree) {
+    // DOM elements
+    this.searchInput = document.getElementById("search-input");
+    this.searchClearButton = document.getElementById("search-clear");
+    this.searchContainer = document.getElementById("search-container");
+    this.noResultsElement = document.getElementById("search-no-results");
+    this.resultsContainer = document.getElementById("search-results-container");
+
+    if (this.loomTree) {
       this.initializeSearchInput();
       this.initializeSearchIndex();
     } else {
-      console.warn(
-        "getLoomTree callback isn't available for search initialization"
-      );
+      console.warn("loomTree isn't available for search initialization");
     }
   }
 
@@ -70,7 +60,7 @@ class SearchManager {
     }
   }
 
-  addNodeToSearchIndex(node) {
+  addNodeToSearchIndex(node, fullText) {
     if (!node) return;
 
     const patchContent = this.extractPatchContent(node.patch);
@@ -83,7 +73,7 @@ class SearchManager {
         summary: node.summary || "",
         type: node.type,
         timestamp: node.timestamp,
-        fullContent: this.getLoomTree().renderNode(node),
+        fullContent: fullText,
       });
     } catch (error) {
       console.warn("Error adding node to search index:", error);
@@ -108,11 +98,10 @@ class SearchManager {
       });
 
       // Add all existing nodes to the index
-      const loomTree = this.getLoomTree();
-      Object.keys(loomTree.nodeStore).forEach(nodeId => {
-        const node = loomTree.nodeStore[nodeId];
+      Object.keys(this.loomTree.nodeStore).forEach(nodeId => {
+        const node = this.loomTree.nodeStore[nodeId];
         if (node) {
-          this.addNodeToSearchIndex(node);
+          this.addNodeToSearchIndex(node, this.loomTree.renderNode(node));
         }
       });
     } catch (error) {
@@ -130,15 +119,13 @@ class SearchManager {
         boost: {
           content: 3,
           summary: 2,
-          type: 1,
         },
         prefix: true,
         fuzzy: 0.2,
       });
 
-      const loomTree = this.getLoomTree();
       return results.map(result => {
-        const node = loomTree.nodeStore[result.id];
+        const node = this.loomTree.nodeStore[result.id];
         return {
           node: node,
           score: result.score,
@@ -204,18 +191,14 @@ class SearchManager {
       // Add rating indicators
       let ratingHtml = "";
       if (result.node.rating === true) {
-        ratingHtml =
-          '<span style="color: #28a745; font-size: 1.1em;">👍</span>';
+        ratingHtml = '<span class="search-result-rating-positive">👍</span>';
       } else if (result.node.rating === false) {
-        ratingHtml =
-          '<span style="color: #dc3545; font-size: 1.1em;">👎</span>';
+        ratingHtml = '<span class="search-result-rating-negative">👎</span>';
       }
 
-      // Add subtree stats (using pre-calculated values)
       let subtreeHtml = "";
       if (result.node.children && result.node.children.length > 0) {
-        const totalNodes = result.node.treeStats.totalChildNodes + 1; // +1 to include the node itself
-        subtreeHtml = ` | 🍃 ${result.node.children.length}/${totalNodes}`;
+        subtreeHtml = ` | 🍃 ${result.node.treeStats.totalChildNodes}`;
       }
 
       // Build the metadata line with proper separators
@@ -238,9 +221,7 @@ class SearchManager {
       resultItem.appendChild(meta);
 
       resultItem.onclick = () => {
-        if (this.onNodeFocus) {
-          this.onNodeFocus(result.node.id);
-        }
+        this.focusOnNode(result.node.id);
       };
 
       this.resultsContainer.appendChild(resultItem);
@@ -281,9 +262,6 @@ class SearchManager {
           this.renderSearchResults(query);
         } else {
           this.clearSearchState();
-          if (this.onNodeFocus && this.getFocusId) {
-            this.onNodeFocus(this.getFocusId());
-          }
         }
       }, 200);
     });
@@ -293,9 +271,6 @@ class SearchManager {
       this.searchInput.value = "";
       this.searchClearButton.style.display = "none";
       this.clearSearchState();
-      if (this.onNodeFocus && this.getFocusId) {
-        this.onNodeFocus(this.getFocusId());
-      }
     });
 
     // Handle keyboard navigation
@@ -304,9 +279,6 @@ class SearchManager {
         e.target.value = "";
         this.searchClearButton.style.display = "none";
         this.clearSearchState();
-        if (this.onNodeFocus && this.getFocusId) {
-          this.onNodeFocus(this.getFocusId());
-        }
       }
     });
 
@@ -315,20 +287,12 @@ class SearchManager {
       if (this.searchContainer && !this.searchContainer.contains(e.target)) {
         if (this.searchResultsMode) {
           this.clearSearchState();
-          if (this.onNodeFocus && this.getFocusId) {
-            this.onNodeFocus(this.getFocusId());
-          }
         }
       }
     });
   }
 
-  // Public API methods
-  addNode(node) {
-    this.addNodeToSearchIndex(node);
-  }
-
-  updateNode(node) {
+  updateNode(node, fullText) {
     if (!node) return;
 
     try {
@@ -338,7 +302,7 @@ class SearchManager {
         summary: node.summary || "",
         type: node.type,
         timestamp: node.timestamp,
-        fullContent: this.getLoomTree().renderNode(node),
+        fullContent: fullText,
       });
     } catch (error) {
       console.warn("Error updating node in search index:", error);
@@ -355,11 +319,10 @@ class SearchManager {
 
   rebuildIndex() {
     window.electronAPI.searchIndexRemoveAll();
-    const loomTree = this.getLoomTree();
-    Object.keys(loomTree.nodeStore).forEach(nodeId => {
-      const node = loomTree.nodeStore[nodeId];
+    Object.keys(this.loomTree.nodeStore).forEach(nodeId => {
+      const node = this.loomTree.nodeStore[nodeId];
       if (node) {
-        this.addNode(node);
+        this.addNodeToSearchIndex(node, this.loomTree.renderNode(node));
       }
     });
   }
@@ -369,6 +332,10 @@ class SearchManager {
       isActive: this.searchResultsMode,
       query: this.currentSearchQuery,
     };
+  }
+
+  updateLoomTree(newLoomTree) {
+    this.loomTree = newLoomTree;
   }
 }
 

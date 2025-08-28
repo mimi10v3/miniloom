@@ -41,10 +41,29 @@ class HTTPClient {
   }
 }
 
-// API client implementations for different providers
+// Unified API client for all providers
 class APIClient {
+  static async callProvider(providerType, endpoint, prompt, params) {
+    switch (providerType) {
+      case "base":
+        return this.baseProvider(endpoint, prompt, params);
+      case "openai":
+        return this.openaiProvider(endpoint, prompt, params);
+      case "openai-chat":
+        return this.openaiChatProvider(endpoint, prompt, params);
+      case "openrouter":
+        return this.openrouterProvider(endpoint, prompt, params);
+      case "together":
+        return this.togetherProvider(endpoint, prompt, params);
+      case "anthropic":
+        return this.anthropicProvider(endpoint, prompt, params);
+      default:
+        throw new Error(`Unknown provider type: ${providerType}`);
+    }
+  }
+
   static async baseProvider(endpoint, prompt, params) {
-    return HTTPClient.makeRequest(endpoint + "generate", {
+    const response = await HTTPClient.makeRequest(endpoint + "generate", {
       body: {
         prompt: prompt,
         prompt_node: true,
@@ -53,6 +72,13 @@ class APIClient {
         output_branches: params.outputBranches,
       },
     });
+
+    // Base provider returns an array of responses, extract finish reasons
+    return response.map((item, index) => ({
+      text: item.text,
+      model: item.model || "base-model",
+      finish_reason: item.finish_reason || "stop", // Base provider typically stops naturally
+    }));
   }
 
   static async openaiProvider(endpoint, prompt, params) {
@@ -68,10 +94,17 @@ class APIClient {
       top_p: Number(params.topP),
     };
 
-    return HTTPClient.makeRequest(endpoint, {
+    const response = await HTTPClient.makeRequest(endpoint, {
       headers,
       body: requestBody,
     });
+
+    // Extract finish reasons from OpenAI response
+    return response.choices.map(choice => ({
+      text: choice.text,
+      model: response.model,
+      finish_reason: choice.finish_reason,
+    }));
   }
 
   static async openaiChatProvider(endpoint, prompt, params) {
@@ -86,10 +119,112 @@ class APIClient {
       top_p: params.topP,
     };
 
-    return HTTPClient.makeRequest(endpoint, {
+    const response = await HTTPClient.makeRequest(endpoint, {
       headers,
       body: requestBody,
     });
+
+    // Extract finish reasons from OpenAI Chat response
+    return response.choices.map(choice => ({
+      text: choice.message.content,
+      model: response.model,
+      finish_reason: choice.finish_reason,
+    }));
+  }
+
+  static async openrouterProvider(endpoint, prompt, params) {
+    const authToken = `Bearer ${params.apiKey}`;
+    const apiDelay = Number(params.delay || 0);
+
+    const batchPromises = [];
+    const calls = params.outputBranches;
+
+    for (let i = 1; i <= calls; i++) {
+      const body = {
+        model: params.modelName,
+        prompt: prompt,
+        max_tokens: Number(params.tokensPerBranch),
+        n: 1,
+        temperature: Number(params.temperature),
+        top_p: Number(params.topP),
+        top_k: Number(params.topK),
+        repetition_penalty: Number(params.repetitionPenalty),
+        provider: { require_parameters: true },
+      };
+
+      const promise = HTTPClient.delay(apiDelay * i)
+        .then(() => {
+          const headers = {
+            accept: "application/json",
+            Authorization: authToken,
+            "HTTP-Referer": "https://github.com/JD-P/miniloom",
+            "X-Title": "MiniLoom",
+          };
+
+          return HTTPClient.makeRequest(endpoint, {
+            headers,
+            body,
+          });
+        })
+        .then(responseJson => {
+          return responseJson.choices.map(choice => ({
+            text: choice.text,
+            model: responseJson.model,
+            finish_reason: choice.finish_reason,
+          }));
+        });
+
+      batchPromises.push(promise);
+    }
+
+    const batch = await Promise.all(batchPromises);
+    return batch.flat();
+  }
+
+  static async togetherProvider(endpoint, prompt, params) {
+    const authToken = `Bearer ${params.apiKey}`;
+    const apiDelay = Number(params.delay || 0);
+
+    const batchPromises = [];
+    const calls = params.outputBranches;
+
+    for (let i = 1; i <= calls; i++) {
+      const body = {
+        model: params.modelName,
+        prompt: prompt,
+        max_tokens: Number(params.tokensPerBranch),
+        n: 1,
+        temperature: Number(params.temperature),
+        top_p: Number(params.topP),
+        top_k: Number(params.topK),
+        repetition_penalty: Number(params.repetitionPenalty),
+      };
+
+      const promise = HTTPClient.delay(apiDelay * i)
+        .then(() => {
+          const headers = {
+            accept: "application/json",
+            Authorization: authToken,
+          };
+
+          return HTTPClient.makeRequest(endpoint, {
+            headers,
+            body,
+          });
+        })
+        .then(responseJson => {
+          return responseJson.output.choices.map(choice => ({
+            text: choice.text,
+            model: responseJson.model,
+            finish_reason: choice.finish_reason,
+          }));
+        });
+
+      batchPromises.push(promise);
+    }
+
+    const batch = await Promise.all(batchPromises);
+    return batch.flat();
   }
 
   static async anthropicProvider(endpoint, prompt, params) {
@@ -106,62 +241,19 @@ class APIClient {
       top_p: Number(params.topP),
     };
 
-    return HTTPClient.makeRequest(endpoint, {
+    const response = await HTTPClient.makeRequest(endpoint, {
       headers,
       body: requestBody,
     });
-  }
 
-  static async togetherProvider(endpoint, prompt, params, apiType = "openai") {
-    const authToken = `Bearer ${params.apiKey}`;
-    const apiDelay = Number(params.delay || 0);
-
-    const batchPromises = [];
-    const calls = apiType === "openai" ? 1 : params.outputBranches;
-
-    for (let i = 1; i <= calls; i++) {
-      const body = {
-        model: params.modelName,
-        prompt: prompt,
-        max_tokens: Number(params.tokensPerBranch),
-        n: apiType === "openai" ? Number(params.outputBranches) : 1,
-        temperature: Number(params.temperature),
-        top_p: Number(params.topP),
-        top_k: Number(params.topK),
-        repetition_penalty: Number(params.repetitionPenalty),
-      };
-
-      if (apiType === "openrouter") {
-        body.provider = { require_parameters: true };
-      }
-
-      const promise = HTTPClient.delay(apiDelay * i)
-        .then(() =>
-          HTTPClient.makeRequest(endpoint, {
-            headers: {
-              accept: "application/json",
-              Authorization: authToken,
-            },
-            body,
-          })
-        )
-        .then(responseJson => {
-          const choices =
-            apiType === "openai" || apiType === "openrouter"
-              ? responseJson.choices
-              : responseJson.output.choices;
-
-          return choices.map(choice => ({
-            text: choice.text,
-            model: responseJson.model,
-          }));
-        });
-
-      batchPromises.push(promise);
-    }
-
-    const batch = await Promise.all(batchPromises);
-    return apiType === "openai" ? batch[0] : batch.flat();
+    // Extract finish reasons from Anthropic response
+    return [
+      {
+        text: response.content[0].text,
+        model: response.model,
+        finish_reason: response.stop_reason,
+      },
+    ];
   }
 }
 
@@ -257,93 +349,76 @@ class LLMService {
 
     const samplingMethod = params.samplingMethod;
 
+    // Use unified provider call for summary generation
     if (
-      ["together", "openrouter", "openai", "openai-chat"].includes(
-        samplingMethod
-      )
+      [
+        "base",
+        "openai",
+        "openai-chat",
+        "openrouter",
+        "together",
+        "anthropic",
+      ].includes(samplingMethod)
     ) {
-      if (samplingMethod === "openai-chat") {
-        const response = await APIClient.openaiChatProvider(endpoint, prompt, {
-          ...params,
-          tokensPerBranch: 10,
-          outputBranches: 1,
-        });
-
-        const text = response.choices[0].message.content;
-        return window.utils.extractThreeWords(text);
-      } else if (samplingMethod === "openai") {
-        const openaiParams = {
-          apiKey: params.apiKey,
-          outputBranches: 1,
-          modelName: params.modelName,
-          tokensPerBranch: 10,
-          temperature: params.temperature,
-          topP: params.topP,
-        };
-
-        const responseData = await APIClient.openaiProvider(
-          endpoint,
-          prompt,
-          openaiParams
-        );
-
-        return window.utils.extractThreeWords(responseData.choices[0].text);
-      } else {
-        const togetherParams = {
-          apiKey: params.apiKey,
-          outputBranches: 1,
-          modelName: params.modelName,
-          tokensPerBranch: 10,
-          temperature: params.temperature,
-          topP: params.topP,
-          topK: params.topK,
-          repetitionPenalty: params.repetitionPenalty,
-        };
-
-        const batch = await APIClient.togetherProvider(
-          endpoint,
-          prompt,
-          togetherParams,
-          samplingMethod
-        );
-
-        return window.utils.extractThreeWords(batch[0].text);
-      }
-    } else {
-      const response = await APIClient.baseProvider(endpoint, prompt, {
+      const summaryParams = {
+        ...params,
         tokensPerBranch: 10,
         outputBranches: 1,
-      });
+      };
 
-      return window.utils.extractThreeWords(response[1].text);
+      try {
+        const response = await APIClient.callProvider(
+          samplingMethod,
+          endpoint,
+          prompt,
+          summaryParams
+        );
+
+        if (samplingMethod === "openai-chat") {
+          return window.utils.extractThreeWords(response[0].text);
+        } else if (samplingMethod === "anthropic") {
+          return window.utils.extractThreeWords(response[0].text);
+        } else if (samplingMethod === "base") {
+          return window.utils.extractThreeWords(response[0].text);
+        } else {
+          // openai, openrouter, together
+          return window.utils.extractThreeWords(response[0].text);
+        }
+      } catch (error) {
+        console.warn("Summary generation failed:", error);
+        return "Summary Failed";
+      }
+    } else {
+      return "Summary Not Available";
     }
   }
 
-  // Main generation entry point
+  // Main generation entry point - now directly maps to provider methods
   async generateNewResponses(nodeId) {
     const params = this.prepareGenerationParams();
     const samplingMethod = params.samplingMethod;
 
+    // Direct method mapping - names now match settings dropdown exactly
     const methodMap = {
-      base: () => this.generateWithTogether(nodeId, "base"),
-      together: () => this.generateWithTogether(nodeId, "together"),
-      openrouter: () => this.generateWithTogether(nodeId, "openrouter"),
-      openai: () => this.generateWithOpenAI(nodeId),
+      base: () => this.generateWithProvider(nodeId, "base"),
+      openai: () => this.generateWithProvider(nodeId, "openai"),
       "openai-chat": () => this.generateWithOpenAIChat(nodeId),
-      anthropic: () => this.generateWithAnthropic(nodeId),
+      openrouter: () => this.generateWithProvider(nodeId, "openrouter"),
+      together: () => this.generateWithProvider(nodeId, "together"),
+      anthropic: () => this.generateWithProvider(nodeId, "anthropic"),
     };
 
     const method = methodMap[samplingMethod] || methodMap["base"];
     await method();
   }
 
-  // Generation implementation methods
-  async generateWithTogether(nodeId, apiType = "openai") {
+  // Unified generation method for most providers
+  async generateWithProvider(nodeId, providerType) {
     await this.executeGeneration(nodeId, async () => {
       const params = this.prepareGenerationParams();
       const prompt = this.callbacks.getEditor().value;
 
-      const togetherParams = {
+      const providerParams = {
         apiKey: params.apiKey,
         modelName: params.modelName,
         outputBranches: params.outputBranches,
@@ -355,70 +430,14 @@ class LLMService {
         delay: params.apiDelay,
       };
 
-      const newResponses = await APIClient.togetherProvider(
+      const newResponses = await APIClient.callProvider(
+        providerType,
         params.apiUrl,
         prompt,
-        togetherParams,
-        apiType
+        providerParams
       );
 
       return newResponses;
-    });
-  }
-
-  async generateWithAnthropic(nodeId) {
-    await this.executeGeneration(nodeId, async () => {
-      const params = this.prepareGenerationParams();
-      const prompt = this.callbacks.getEditor().value;
-
-      const anthropicParams = {
-        apiKey: params.apiKey,
-        modelName: params.modelName,
-        outputBranches: params.outputBranches,
-        tokensPerBranch: params.tokensPerBranch,
-        temperature: params.temperature,
-        topP: params.topP,
-      };
-
-      const responseData = await APIClient.anthropicProvider(
-        params.apiUrl,
-        prompt,
-        anthropicParams
-      );
-
-      return [
-        {
-          text: responseData.content[0].text,
-          model: responseData.model,
-        },
-      ];
-    });
-  }
-
-  async generateWithOpenAI(nodeId) {
-    await this.executeGeneration(nodeId, async () => {
-      const params = this.prepareGenerationParams();
-      const prompt = this.callbacks.getEditor().value;
-
-      const openaiParams = {
-        apiKey: params.apiKey,
-        modelName: params.modelName,
-        outputBranches: params.outputBranches,
-        tokensPerBranch: params.tokensPerBranch,
-        temperature: params.temperature,
-        topP: params.topP,
-      };
-
-      const responseData = await APIClient.openaiProvider(
-        params.apiUrl,
-        prompt,
-        openaiParams
-      );
-
-      return responseData.choices.map(choice => ({
-        text: choice.text,
-        model: responseData.model,
-      }));
     });
   }
 
@@ -509,9 +528,21 @@ class LLMService {
         continue;
       }
 
-      const responseSummary = await HTTPClient.delay(apiDelay).then(() => {
-        return this.generateSummary(response.text);
-      });
+      // Check if no tokens were generated and model finished
+      const hasNoContent = !response.text || response.text.trim() === "";
+      const isFinished =
+        response.finish_reason === "stop" ||
+        response.finish_reason === "end_turn" ||
+        response.finish_reason === "assistant";
+
+      let responseSummary;
+      if (hasNoContent && isFinished) {
+        responseSummary = "Text Complete";
+      } else {
+        responseSummary = await HTTPClient.delay(apiDelay).then(() => {
+          return this.generateSummary(response.text);
+        });
+      }
 
       const childText = loomTree.renderNode(rollFocus) + response.text;
       const responseNode = loomTree.createNode(
@@ -523,7 +554,16 @@ class LLMService {
 
       this.callbacks.updateNodeMetadata(responseNode.id, {
         model: response.model,
+        finishReason: response.finish_reason,
       });
+
+      // Update search index
+      if (this.callbacks.updateSearchIndex) {
+        this.callbacks.updateSearchIndex(
+          responseNode,
+          loomTree.renderNode(responseNode)
+        );
+      }
     }
 
     // Update tree view to show new badges
@@ -553,9 +593,23 @@ class LLMService {
       });
 
       const newChatText = JSON.stringify(newChatData, null, 2);
-      const summary = await this.generateSummary(
-        assistantMessage.content || "Assistant response"
-      );
+
+      // Check if no tokens were generated and model finished
+      const hasNoContent =
+        !assistantMessage.content || assistantMessage.content.trim() === "";
+      const isFinished =
+        choice.finish_reason === "stop" ||
+        choice.finish_reason === "end_turn" ||
+        choice.finish_reason === "assistant";
+
+      let summary;
+      if (hasNoContent && isFinished) {
+        summary = "Text Complete";
+      } else {
+        summary = await this.generateSummary(
+          assistantMessage.content || "Assistant response"
+        );
+      }
 
       const responseNode = loomTree.createNode(
         "gen",
@@ -566,8 +620,16 @@ class LLMService {
       this.callbacks.updateNodeMetadata(responseNode.id, {
         model: responseData.model,
         usage: responseData.usage,
-        finish_reason: choice.finish_reason,
+        finishReason: choice.finish_reason,
       });
+
+      // Update search index
+      if (this.callbacks.updateSearchIndex) {
+        this.callbacks.updateSearchIndex(
+          responseNode,
+          loomTree.renderNode(responseNode)
+        );
+      }
     }
 
     // Update tree view to show new badges

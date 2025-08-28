@@ -600,7 +600,10 @@ function renderFavoritesTable() {
 
     const keyOption = document.createElement("option");
     keyOption.value = "";
-    keyOption.textContent = "-- Select Key --";
+    keyOption.textContent = "None";
+    if (favorite.key === "" || favorite.key === undefined) {
+      keyOption.selected = true;
+    }
     keySelect.appendChild(keyOption);
 
     Object.keys(apiKeys).forEach(keyName => {
@@ -863,6 +866,16 @@ document.addEventListener("DOMContentLoaded", function () {
   // Close button
   document.getElementById("close-settings")?.addEventListener("click", () => {
     window.electronAPI.closeSettingsWindow();
+  });
+
+  // Listen for open-to-tab event from main process
+  window.electronAPI.onOpenToTab((event, tabName) => {
+    if (
+      tabName &&
+      ["services", "api-keys", "samplers", "favorites"].includes(tabName)
+    ) {
+      setActiveTab(tabName);
+    }
   });
 
   // Initialize

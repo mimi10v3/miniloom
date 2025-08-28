@@ -250,6 +250,11 @@
         vertical-align: baseline;
       }
 
+      .finish-reason {
+        color: var(--text-secondary);
+        font-size: var(--font-size-sm);
+      }
+
 
 
       #node-summary {
@@ -306,6 +311,17 @@
       .editor-stats .negative {
         color: #dc3545;
         font-weight: var(--font-weight-medium);
+      }
+
+      /* Search result rating indicators */
+      .search-result-rating-positive {
+        color: #28a745;
+        font-size: 1.1em;
+      }
+
+      .search-result-rating-negative {
+        color: #dc3545;
+        font-size: 1.1em;
       }
 
       #thumbs-display {
@@ -1017,6 +1033,7 @@
             </div>
             <div class="node-info-line">
               <span id="node-metadata">🕐 N/A | 📏 0</span>
+              <span id="finish-reason" class="finish-reason" style="display: none;"></span>
               <span id="subtree-info" class="subtree-info" style="display: none;">
                 🍃 <span id="subtree-children">0</span>/<span id="subtree-total">0</span>
               </span>

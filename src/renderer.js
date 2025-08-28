@@ -46,10 +46,11 @@ const DOM = {
   nodeDepth: document.getElementById("node-depth"),
   nodePosition: document.getElementById("node-position"),
   nodeCreatedTime: document.getElementById("node-created-time"),
+  nodeMetadata: document.getElementById("node-metadata"),
+  finishReason: document.getElementById("finish-reason"),
   subtreeInfo: document.getElementById("subtree-info"),
   subtreeChildren: document.getElementById("subtree-children"),
   subtreeTotal: document.getElementById("subtree-total"),
-  nodeMetadata: document.getElementById("node-metadata"),
   errorMsgEl: document.getElementById("error-message"),
   errorsEl: document.getElementById("errors"),
   errorCloseButton: document.getElementById("error-close"),
@@ -118,11 +119,35 @@ function updateUI() {
   if (treeNav) {
     treeNav.updateTreeView();
   }
+}
 
-  // Update search if needed
-  if (searchManager && searchManager.getSearchState().isActive) {
-    searchManager.updateSearchDisplay();
-  }
+/**
+ * Helper function to convert finish reason codes to user-friendly text
+ */
+function getFinishReasonDisplayText(finishReason) {
+  const reasonMap = {
+    stop: "Complete",
+    length: "Max Length",
+    content_filter: "Content Filtered",
+    tool_calls: "Tool Called",
+    function_call: "Function Called",
+    max_tokens: "Token Limit",
+    timeout: "Timed Out",
+    user: "User Stopped",
+    assistant: "Assistant Stopped",
+    system: "System Stopped",
+    end_turn: "Turn Ended",
+    max_content_length: "Content Limit",
+    safety: "Safety Filter",
+    recitation: "Recitation Detected",
+    network_error: "Network Error",
+    server_error: "Server Error",
+    rate_limit: "Rate Limited",
+    invalid_request: "Invalid Request",
+    unknown: "Unknown",
+  };
+
+  return reasonMap[finishReason] || finishReason || "Unknown";
 }
 
 /**
@@ -186,6 +211,23 @@ function updateFocusedNodeStats() {
     DOM.nodeMetadata.textContent = `🕐 ${formattedDate} | 📏 ${focusedNode.depth}`;
   }
 
+  // Display finish reason if available
+  if (DOM.finishReason) {
+    if (
+      focusedNode.finishReason &&
+      focusedNode.type === "gen" &&
+      focusedNode.finishReason !== "length"
+    ) {
+      const finishReasonText = getFinishReasonDisplayText(
+        focusedNode.finishReason
+      );
+      DOM.finishReason.textContent = ` | 🛑 ${finishReasonText}`;
+      DOM.finishReason.style.display = "inline";
+    } else {
+      DOM.finishReason.style.display = "none";
+    }
+  }
+
   // Update subtree info
   if (DOM.subtreeInfo && DOM.subtreeChildren && DOM.subtreeTotal) {
     if (focusedNode.children && focusedNode.children.length > 0) {
@@ -206,6 +248,7 @@ function updateFocusedNodeStats() {
           `Max chars: ${focusedNode.treeStats.maxCharCountOfChildren}\n` +
           `Last update: ${subtreeDate}`
       );
+      DOM.subtreeInfo.textContent = ` | 🍃 ${focusedNode.children.length}/${focusedNode.treeStats.totalChildNodes}`;
     } else {
       DOM.subtreeInfo.style.display = "none";
     }
@@ -297,6 +340,15 @@ function setupEditorHandlers() {
         prompt,
         "New Node"
       );
+
+      // Update search index
+      if (searchManager) {
+        searchManager.addNodeToSearchIndex(
+          child,
+          appState.loomTree.renderNode(child)
+        );
+      }
+
       updateFocus(child.id, "editor-auto-save");
     }
   });
@@ -317,6 +369,15 @@ function setupEditorHandlers() {
         prompt,
         appState.focusedNode.summary
       );
+
+      // Update search index
+      if (searchManager) {
+        searchManager.updateNode(
+          appState.focusedNode,
+          appState.loomTree.renderNode(appState.focusedNode)
+        );
+      }
+
       appState.updatingNode = false;
     }
 
@@ -335,6 +396,15 @@ function setupEditorHandlers() {
           appState.updatingNode = true;
           const summary = await llmService.generateSummary(prompt);
           appState.loomTree.updateNode(appState.focusedNode, prompt, summary);
+
+          // Update search index
+          if (searchManager) {
+            searchManager.updateNode(
+              appState.focusedNode,
+              appState.loomTree.renderNode(appState.focusedNode)
+            );
+          }
+
           appState.updatingNode = false;
         } catch (error) {
           console.error("Summary generation error:", error);
@@ -398,6 +468,7 @@ async function loadFile() {
       }
 
       if (searchManager) {
+        searchManager.updateLoomTree(appState.loomTree);
         searchManager.rebuildIndex();
       }
     }
@@ -562,12 +633,28 @@ async function updateFocusSummary() {
         summary = "Summary Not Given";
       }
       appState.loomTree.updateNode(currentFocus, newPrompt, summary);
+
+      // Update search index
+      if (searchManager) {
+        searchManager.updateNode(
+          currentFocus,
+          appState.loomTree.renderNode(currentFocus)
+        );
+      }
     } catch (error) {
       appState.loomTree.updateNode(
         currentFocus,
         newPrompt,
         "Server Response Error"
       );
+
+      // Update search index
+      if (searchManager) {
+        searchManager.updateNode(
+          currentFocus,
+          appState.loomTree.renderNode(currentFocus)
+        );
+      }
     }
     appState.updatingNode = false;
   }
@@ -619,9 +706,16 @@ function createLLMServiceConfig() {
     },
     showError: message => {
       console.warn("Global error:", message);
+      // Trigger UI update to show the error
+      updateErrorDisplay();
     },
     clearErrors: () => {
       clearFocusedNodeError();
+    },
+    updateSearchIndex: (node, fullText) => {
+      if (searchManager) {
+        searchManager.addNodeToSearchIndex(node, fullText);
+      }
     },
   };
 }
@@ -633,7 +727,6 @@ async function init() {
   try {
     await loadSettings();
 
-    // Initialize services
     llmService = new LLMService(createLLMServiceConfig());
 
     treeNav = new TreeNav(
@@ -646,14 +739,18 @@ async function init() {
       }
     );
 
-    // Initialize search manager
     searchManager = new SearchManager({
-      getLoomTree: () => appState.getLoomTree(),
-      getFocus: () => appState.getFocusedNode(),
-      onNodeFocus: nodeId => {
-        updateFocus(nodeId, "search-result");
+      focusOnNode: nodeId => {
+        if (nodeId) {
+          updateFocus(nodeId, "search-result");
+        } else {
+          const focusedNode = appState.getFocusedNode();
+          if (focusedNode) {
+            updateFocus(focusedNode.id, "search-result");
+          }
+        }
       },
-      getFocusId: () => appState.getFocusedNode().id,
+      loomTree: appState.getLoomTree(),
       treeNav: treeNav,
     });
 
@@ -680,6 +777,11 @@ async function init() {
 
     // Initial render
     updateUI();
+
+    // Rebuild search index with current data
+    if (searchManager) {
+      searchManager.rebuildIndex();
+    }
 
     // Check for new user setup
     checkForNewUser();

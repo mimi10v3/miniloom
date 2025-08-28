@@ -135,9 +135,8 @@ function renderFavoritesButtons() {
 
       // Check if this favorite has all required fields
       const hasService = favorite.service && services[favorite.service];
-      const hasKey = favorite.key && apiKeys[favorite.key];
       const hasSampler = favorite.sampler && samplers[favorite.sampler];
-      const isComplete = hasService && hasKey && hasSampler;
+      const isComplete = hasService && hasSampler; // Key is optional
 
       if (!isComplete || !favorite.name) {
         favoriteBtn.classList.add("empty");
@@ -168,8 +167,8 @@ function applyFavorite(index) {
   if (serviceSelector && favorite.service) {
     serviceSelector.value = favorite.service;
   }
-  if (apiKeySelector && favorite.key) {
-    apiKeySelector.value = favorite.key;
+  if (apiKeySelector) {
+    apiKeySelector.value = favorite.key || ""; // Handle "None" (empty string) case
   }
   if (samplerSelector && favorite.sampler) {
     samplerSelector.value = favorite.sampler;
@@ -194,8 +193,8 @@ function saveCurrentSettings() {
   if (serviceSelector && serviceSelector.value) {
     appState.samplerSettingsStore.lastUsed.service = serviceSelector.value;
   }
-  if (apiKeySelector && apiKeySelector.value) {
-    appState.samplerSettingsStore.lastUsed.apiKey = apiKeySelector.value;
+  if (apiKeySelector) {
+    appState.samplerSettingsStore.lastUsed.apiKey = apiKeySelector.value || ""; // Save "None" as empty string
   }
   if (samplerSelector && samplerSelector.value) {
     appState.samplerSettingsStore.lastUsed.sampler = samplerSelector.value;
@@ -240,13 +239,17 @@ function restoreLastUsedSettings() {
     }
   }
 
-  if (
-    lastUsed.apiKey &&
-    appState.samplerSettingsStore["api-keys"][lastUsed.apiKey]
-  ) {
+  if (lastUsed.apiKey !== undefined) {
     const apiKeySelector = document.getElementById("api-key-selector");
     if (apiKeySelector) {
-      apiKeySelector.value = lastUsed.apiKey;
+      // Handle "None" (empty string) case or valid API key
+      if (
+        lastUsed.apiKey === "" ||
+        (lastUsed.apiKey &&
+          appState.samplerSettingsStore["api-keys"][lastUsed.apiKey])
+      ) {
+        apiKeySelector.value = lastUsed.apiKey;
+      }
     }
   }
 

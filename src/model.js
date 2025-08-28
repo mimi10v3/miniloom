@@ -21,6 +21,7 @@ class Node {
     this.read = false;
     this.children = [];
     this.model = null; // Model used for generation (e.g., "gpt-4", "llama-2-70b")
+    this.finishReason = null; // Finish reason from LLM API (e.g., "stop", "length", "content_filter")
 
     // Status tracking
     this.generationPending = false; // Track if generation is in progress
@@ -70,10 +71,6 @@ class LoomTree {
     this.updateNodeStats(newNode);
     this.updateParentStatsIncremental(newNode, 1, newNode.read ? 0 : 1);
 
-    if (window.searchManager) {
-      window.searchManager.addNode(newNode);
-    }
-
     return newNode;
   }
 
@@ -90,10 +87,6 @@ class LoomTree {
 
     this.updateNodeStats(node);
     this.updateParentStatsIncremental(node, 0, 0);
-
-    if (window.searchManager) {
-      window.searchManager.updateNode(node);
-    }
   }
 
   updateNodeStats(node) {
@@ -263,6 +256,7 @@ class LoomTree {
         children: node.children,
         model: node.model,
         error: node.error,
+        finishReason: node.finishReason,
       };
     });
 
@@ -289,6 +283,7 @@ class LoomTree {
       node.model = nodeData.model;
       node.generationPending = false;
       node.error = nodeData.error || null;
+      node.finishReason = nodeData.finishReason || null;
 
       this.nodeStore[nodeId] = node;
     });
@@ -354,30 +349,6 @@ class LoomTree {
     node.treeStats.maxCharCountOfChildren = maxCharCountOfChildren;
     node.treeStats.lastChildUpdate = lastChildUpdate;
     node.treeStats.unreadChildNodes = unreadChildNodes;
-
-    // Debug logging for non-root nodes
-    if (node.id !== "1") {
-      console.log(`Node ${node.id} tree stats:`, {
-        totalChildNodes,
-        maxChildDepth,
-        maxWordCountOfChildren,
-        maxCharCountOfChildren,
-        unreadChildNodes,
-        ownWordCount: node.wordCount,
-        ownCharCount: node.characterCount,
-        lastChildUpdate: new Date(lastChildUpdate).toISOString(),
-        children: node.children.map(childId => {
-          const child = this.nodeStore[childId];
-          return {
-            id: childId,
-            read: child ? child.read : "unknown",
-            unreadChildNodes: child
-              ? child.treeStats.unreadChildNodes
-              : "unknown",
-          };
-        }),
-      });
-    }
   }
 }
 
