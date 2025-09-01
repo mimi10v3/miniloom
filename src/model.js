@@ -153,27 +153,65 @@ class LoomTree {
     if (node.parent) {
       let parentStats = this.nodeStore[node.parent].treeStats;
       parentStats.totalChildNodes += numNodesAdded;
-      // Don't update lastChildUpdate here - it should be based on actual node timestamps
 
-      // Use stored node tree stats instead of just the node's own stats
+      // For leaf nodes, use the node's own timestamp; for non-leaf nodes, use their tree's lastChildUpdate
+      const nodeLastUpdate =
+        node.children.length === 0
+          ? node.timestamp
+          : node.treeStats.lastChildUpdate;
+
+      // Update lastChildUpdate to reflect the most recent change
+      parentStats.lastChildUpdate = Math.max(
+        parentStats.lastChildUpdate || 0,
+        nodeLastUpdate
+      );
+
+      // For leaf nodes, use the node's own stats; for non-leaf nodes, use their tree stats
+      const nodeMaxWords =
+        node.children.length === 0
+          ? node.wordCount
+          : node.treeStats.maxWordCountOfChildren;
+      const nodeMaxChars =
+        node.children.length === 0
+          ? node.characterCount
+          : node.treeStats.maxCharCountOfChildren;
+      const nodeMaxDepth =
+        node.children.length === 0 ? 0 : node.treeStats.maxChildDepth;
+
       parentStats.maxWordCountOfChildren = Math.max(
         parentStats.maxWordCountOfChildren,
-        node.treeStats.maxWordCountOfChildren
+        nodeMaxWords
       );
       parentStats.maxCharCountOfChildren = Math.max(
         parentStats.maxCharCountOfChildren,
-        node.treeStats.maxCharCountOfChildren
+        nodeMaxChars
       );
 
       // Update parent's max depth if this node's depth exceeds it
-      let newDepth = node.treeStats.maxChildDepth + 1;
+      let newDepth = nodeMaxDepth + 1;
       parentStats.maxChildDepth = Math.max(parentStats.maxChildDepth, newDepth);
 
-      // Update unreadChildNodes count
-      parentStats.unreadChildNodes = Math.max(
-        0,
-        parentStats.unreadChildNodes + numUnreadChanged
-      );
+      // For unread counts, we need to handle the change incrementally
+      // For leaf nodes: just add/subtract 1 based on read status
+      // For non-leaf nodes: add/subtract the change in their subtree's unread count
+      if (numUnreadChanged !== 0) {
+        // Read status changed - propagate the change up
+        parentStats.unreadChildNodes = Math.max(
+          0,
+          parentStats.unreadChildNodes + numUnreadChanged
+        );
+      } else if (numNodesAdded !== 0) {
+        // Node is being added or removed - adjust count based on node's read status
+        const wasUnread = !node.read;
+        if (numNodesAdded > 0 && wasUnread) {
+          parentStats.unreadChildNodes += 1;
+        } else if (numNodesAdded < 0 && wasUnread) {
+          parentStats.unreadChildNodes = Math.max(
+            0,
+            parentStats.unreadChildNodes - 1
+          );
+        }
+      }
 
       this.updateParentStatsIncremental(
         this.nodeStore[node.parent],
@@ -226,10 +264,24 @@ class LoomTree {
   markNodeAsRead(nodeId) {
     const node = this.nodeStore[nodeId];
     if (node) {
+      // Calculate the change: if node was unread, subtract 1; otherwise no change
+      const wasUnread = !node.read;
+      const unreadChange = wasUnread ? -1 : 0;
+
       node.read = true;
 
-      // Propagate read status upward using existing incremental update
-      this.updateParentStatsIncremental(node, 0, -1);
+      // Update this node's unread count (only affects the node itself, not its subtree)
+      if (wasUnread) {
+        // The node itself is no longer unread, but its subtree unread count is unchanged
+        // So the total change is -1
+        node.treeStats.unreadChildNodes = Math.max(
+          0,
+          node.treeStats.unreadChildNodes - 1
+        );
+      }
+
+      // Propagate the change upward
+      this.updateParentStatsIncremental(node, 0, unreadChange);
 
       // Update tree view if available
       if (window.treeNav) {
@@ -289,6 +341,10 @@ class LoomTree {
     });
 
     this.root = this.nodeStore["1"];
+
+    if (this.root) {
+      this.calculateAllNodeStats(this.root);
+    }
   }
 
   calculateAllNodeStats(node) {

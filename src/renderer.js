@@ -33,9 +33,6 @@ let llmService;
 let treeNav;
 let searchManager;
 
-// Make treeNav globally available for status updates
-window.treeNav = null;
-
 const DOM = {
   editor: document.getElementById("editor"),
   thumbUp: document.getElementById("thumb-up"),
@@ -78,11 +75,109 @@ const DOM = {
 };
 
 /**
- * Unified State Management
- * Single source of truth for all state changes
+ * Initialize or reinitialize all services with current app state
+ */
+function initializeServices() {
+  llmService = new LLMService({
+    autoSaveTick: autoSaveTick,
+    updateFocusSummary: updateFocusSummary,
+    setFocus: newFocus => {
+      updateFocus(newFocus.id, "llm-generation");
+    },
+    updateLoomTree: newLoomTree => {
+      appState.loomTree = newLoomTree;
+    },
+    updateEditor: newEditor => {
+      Object.assign(DOM.editor, newEditor);
+    },
+    updateNodeMetadata: (nodeId, metadata) => {
+      if (appState.loomTree.nodeStore[nodeId]) {
+        Object.assign(appState.loomTree.nodeStore[nodeId], metadata);
+      }
+    },
+    updateTreeView: () => {
+      if (treeNav) {
+        treeNav.updateTreeView();
+      }
+    },
+    getFocus: () => appState.getFocusedNode(),
+    getLoomTree: () => appState.getLoomTree(),
+    getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
+    getEditor: () => DOM.editor,
+    setEditorReadOnly: readOnly => {
+      DOM.editor.readOnly = readOnly;
+    },
+    getSamplerSettings: () => ({
+      selectedServiceName: DOM.serviceSelector?.value || "",
+      selectedSamplerName: DOM.samplerSelector?.value || "",
+      selectedApiKeyName: DOM.apiKeySelector?.value || "",
+    }),
+    setLoading: function (isLoading) {
+      DOM.editor.readOnly = isLoading;
+      if (DOM.die) {
+        DOM.die.classList.toggle("rolling", isLoading);
+      }
+    },
+    showError: message => {
+      console.warn("Global error:", message);
+      // Trigger UI update to show the error
+      updateErrorDisplay();
+    },
+    clearErrors: () => {
+      clearFocusedNodeError();
+    },
+    updateSearchIndex: (node, fullText) => {
+      if (searchManager) {
+        searchManager.addNodeToSearchIndex(node, fullText);
+      }
+    },
+  });
+
+  // Create tree navigation service
+  treeNav = new TreeNav(
+    nodeId => {
+      updateFocus(nodeId, "tree-navigation");
+    },
+    {
+      getFocus: () => appState.getFocusedNode(),
+      getLoomTree: () => appState.getLoomTree(),
+    }
+  );
+
+  // Create search manager
+  searchManager = new SearchManager({
+    focusOnNode: nodeId => {
+      if (nodeId) {
+        updateFocus(nodeId, "search-result");
+      } else {
+        const focusedNode = appState.getFocusedNode();
+        if (focusedNode) {
+          updateFocus(focusedNode.id, "search-result");
+        }
+      }
+    },
+    loomTree: appState.getLoomTree(),
+    treeNav: treeNav,
+  });
+
+  // Make services globally available
+  window.llmService = llmService;
+  window.treeNav = treeNav;
+  window.searchManager = searchManager;
+
+  // Initialize tree view
+  treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
+
+  // Rebuild search index
+  if (searchManager) {
+    searchManager.rebuildIndex();
+  }
+}
+
+/*
+ * Updates UI focus to the node corresponding to nodeId
  */
 function updateFocus(nodeId, reason = "unknown") {
-  // Validate node exists
   const node = appState.loomTree.nodeStore[nodeId];
   if (!node) {
     console.warn(`Node ${nodeId} not found for focus change: ${reason}`);
@@ -93,11 +188,12 @@ function updateFocus(nodeId, reason = "unknown") {
   appState.focusedNode = node;
   appState.loomTree.markNodeAsRead(nodeId);
 
-  // Always trigger UI update
   updateUI();
 
-  // Log for debugging
-  console.log(`Focus changed to ${nodeId} (${reason})`);
+  // Auto-save when focus changes due to content creation
+  if (reason === "editor-auto-save") {
+    autoSave();
+  }
 }
 
 function updateUI() {
@@ -109,15 +205,17 @@ function updateUI() {
   // Update editor
   DOM.editor.value = appState.focusedNode.cachedRenderText;
 
-  // Update all displays
   updateTreeStatsDisplay();
   updateFocusedNodeStats();
   updateThumbState();
   updateErrorDisplay();
 
-  // Update tree view
   if (treeNav) {
     treeNav.updateTreeView();
+  }
+
+  if (window.searchManager) {
+    window.searchManager.rebuildIndex();
   }
 }
 
@@ -266,11 +364,9 @@ function updateErrorDisplay() {
   if (appState.focusedNode.error) {
     DOM.errorMsgEl.textContent = appState.focusedNode.error;
     DOM.errorsEl.classList.add("has-error");
-    DOM.errorsEl.style.display = "block";
   } else {
     DOM.errorMsgEl.textContent = "";
     DOM.errorsEl.classList.remove("has-error");
-    DOM.errorsEl.style.display = "none";
   }
 }
 
@@ -278,6 +374,21 @@ function clearFocusedNodeError() {
   if (appState.focusedNode && appState.focusedNode.error) {
     appState.loomTree.clearNodeError(appState.focusedNode.id);
     updateErrorDisplay();
+  }
+}
+
+/**
+ * Search Index Management
+ */
+function updateSearchIndex(node, fullText) {
+  if (searchManager) {
+    searchManager.addNodeToSearchIndex(node, fullText);
+  }
+}
+
+function updateSearchIndexForNode(node) {
+  if (searchManager) {
+    searchManager.updateNode(node, appState.loomTree.renderNode(node));
   }
 }
 
@@ -297,29 +408,16 @@ function updateThumbState() {
   }
 }
 
-function handleThumbsUp() {
-  const newRating = appState.focusedNode.rating === true ? null : true;
+function handleThumbRating(isThumbsUp) {
+  const currentRating = appState.focusedNode.rating;
+  const targetRating = isThumbsUp ? true : false;
+  const newRating = currentRating === targetRating ? null : targetRating;
+
   appState.loomTree.updateNodeRating(appState.focusedNode.id, newRating);
   updateThumbState();
   if (treeNav) {
     treeNav.updateTreeView();
   }
-}
-
-function handleThumbsDown() {
-  const newRating = appState.focusedNode.rating === false ? null : false;
-  appState.loomTree.updateNodeRating(appState.focusedNode.id, newRating);
-  updateThumbState();
-  if (treeNav) {
-    treeNav.updateTreeView();
-  }
-}
-
-/**
- * Counter Display Management
- */
-function updateCounterDisplay(text) {
-  updateTreeStatsDisplay();
 }
 
 /**
@@ -341,13 +439,7 @@ function setupEditorHandlers() {
         "New Node"
       );
 
-      // Update search index
-      if (searchManager) {
-        searchManager.addNodeToSearchIndex(
-          child,
-          appState.loomTree.renderNode(child)
-        );
-      }
+      updateSearchIndex(child, appState.loomTree.renderNode(child));
 
       updateFocus(child.id, "editor-auto-save");
     }
@@ -370,19 +462,13 @@ function setupEditorHandlers() {
         appState.focusedNode.summary
       );
 
-      // Update search index
-      if (searchManager) {
-        searchManager.updateNode(
-          appState.focusedNode,
-          appState.loomTree.renderNode(appState.focusedNode)
-        );
-      }
+      updateSearchIndexForNode(appState.focusedNode);
 
       appState.updatingNode = false;
     }
 
     // Update character/word count on every keystroke
-    updateCounterDisplay(prompt);
+    updateTreeStatsDisplay();
 
     // Generate summary while user is writing (every 32 characters)
     if (prompt.length % 32 === 0) {
@@ -397,13 +483,7 @@ function setupEditorHandlers() {
           const summary = await llmService.generateSummary(prompt);
           appState.loomTree.updateNode(appState.focusedNode, prompt, summary);
 
-          // Update search index
-          if (searchManager) {
-            searchManager.updateNode(
-              appState.focusedNode,
-              appState.loomTree.renderNode(appState.focusedNode)
-            );
-          }
+          updateSearchIndexForNode(appState.focusedNode);
 
           appState.updatingNode = false;
         } catch (error) {
@@ -447,33 +527,64 @@ async function loadFile() {
   try {
     const data = await window.electronAPI.loadFile();
     if (data) {
-      const newLoomTree = new LoomTree();
-      newLoomTree.loadFromData(data.loomTree);
-
-      // Calculate all node stats and generate cached render text
-      newLoomTree.calculateAllNodeStats(newLoomTree.root);
-
-      appState.loomTree = newLoomTree;
-
-      const savedFocus =
-        data.focus && data.focus.id
-          ? newLoomTree.nodeStore[data.focus.id]
-          : newLoomTree.root;
-
-      if (!savedFocus) {
-        console.warn("Saved focus node not found, using root");
-        updateFocus(newLoomTree.root.id, "file-load-default");
-      } else {
-        updateFocus(savedFocus.id, "file-load-saved");
-      }
-
-      if (searchManager) {
-        searchManager.updateLoomTree(appState.loomTree);
-        searchManager.rebuildIndex();
-      }
+      await loadFileData(data);
     }
+    // If data is null, user cancelled the operation
   } catch (err) {
     console.error("Load File Error:", err);
+  }
+}
+
+async function loadRecentFile(filePath) {
+  try {
+    const data = await window.electronAPI.loadRecentFile(filePath);
+    if (data) {
+      await loadFileData(data);
+    }
+  } catch (err) {
+    console.error("Load Recent File Error:", err);
+  }
+}
+
+async function loadFileData(data) {
+  try {
+    const newLoomTree = new LoomTree();
+    newLoomTree.loadFromData(data.loomTree);
+
+    // Update global state
+    appState.loomTree = newLoomTree;
+
+    // Set focus to saved focus or root
+    const savedFocus =
+      data.focus && data.focus.id
+        ? newLoomTree.nodeStore[data.focus.id]
+        : newLoomTree.root;
+
+    if (!savedFocus) {
+      console.warn("Saved focus node not found, using root");
+      appState.focusedNode = newLoomTree.root;
+    } else {
+      appState.focusedNode = savedFocus;
+    }
+
+    // Ensure the focused node is properly rendered
+    if (appState.focusedNode) {
+      appState.focusedNode.cachedRenderText = newLoomTree.renderNode(
+        appState.focusedNode
+      );
+    }
+
+    // Recreate services with new data
+    initializeServices();
+
+    // Render the new state
+    updateUI();
+
+    // Trigger an auto-save to create the temp file
+    await autoSave();
+  } catch (error) {
+    console.error("Error in loadFileData:", error);
+    throw error;
   }
 }
 
@@ -538,80 +649,52 @@ const onSettingsUpdated = async () => {
   }
 };
 
-/**
- * Event Handlers Setup
- */
-function setupEventHandlers() {
-  if (DOM.generateButton) {
-    DOM.generateButton.onclick = () =>
-      llmService.generateNewResponses(appState.focusedNode.id);
-  }
+// Electron API event handlers
+window.electronAPI.onUpdateFilename(
+  (event, filename, creationTime, filePath, isTemp) => {
+    const filenameElement = document.getElementById("current-filename");
+    if (filenameElement) {
+      // Remove .json extension for display
+      const displayName = filename.replace(/\.json$/, "");
 
-  if (DOM.thumbUp) {
-    DOM.thumbUp.onclick = handleThumbsUp;
-  }
-
-  if (DOM.thumbDown) {
-    DOM.thumbDown.onclick = handleThumbsDown;
-  }
-
-  // Settings labels
-  if (DOM.serviceLabel) {
-    DOM.serviceLabel.style.cursor = "pointer";
-    DOM.serviceLabel.onclick = () =>
-      window.electronAPI.openSettingsToTab("services");
-  }
-
-  if (DOM.apiKeyLabel) {
-    DOM.apiKeyLabel.style.cursor = "pointer";
-    DOM.apiKeyLabel.onclick = () =>
-      window.electronAPI.openSettingsToTab("api-keys");
-  }
-
-  if (DOM.samplerLabel) {
-    DOM.samplerLabel.style.cursor = "pointer";
-    DOM.samplerLabel.onclick = () =>
-      window.electronAPI.openSettingsToTab("samplers");
-  }
-
-  // Error close button handler
-  if (DOM.errorCloseButton) {
-    DOM.errorCloseButton.onclick = clearFocusedNodeError;
-  }
-}
-
-/**
- * Electron API Event Handlers
- */
-function setupElectronHandlers() {
-  window.electronAPI.onUpdateFilename(
-    (event, filename, creationTime, filePath) => {
-      if (DOM.filenameElement) {
-        DOM.filenameElement.innerHTML = `💾 ${filename}`;
-
+      if (isTemp) {
+        // For temp files, show "Untitled" in red with no hover info
+        filenameElement.innerHTML = `💾 <span style="color: red;">Untitled</span>`;
+        filenameElement.title = ""; // No hover info for temp files
+      } else {
+        // For regular files, show filename with hover info
+        filenameElement.innerHTML = `💾 ${displayName}`;
         if (creationTime) {
-          const formattedTime = window.utils.formatTimestamp(creationTime);
-          DOM.filenameElement.title = `File: ${filePath || "Unknown"}\nCreated: ${formattedTime}`;
+          const formattedTime = new Date(creationTime).toLocaleString();
+          filenameElement.title = `File: ${filePath || "Unknown"}\nCreated: ${formattedTime}`;
         } else {
-          DOM.filenameElement.title = `File: ${filePath || "Unknown"}`;
+          filenameElement.title = `File: ${filePath || "Unknown"}`;
         }
       }
     }
-  );
+  }
+);
 
-  window.electronAPI.onInvokeAction((event, action) => {
-    switch (action) {
-      case "save-file":
-        saveFile();
-        break;
-      case "load-file":
-        loadFile();
-        break;
-      default:
-        console.warn("Action not recognized:", action);
-    }
-  });
-}
+window.electronAPI.onInvokeAction((event, action, ...args) => {
+  switch (action) {
+    case "save-file":
+      saveFile();
+      break;
+    case "load-file":
+      loadFile();
+      break;
+    case "new-loom":
+      window.electronAPI.newLoom();
+      break;
+    case "load-recent-file":
+      if (args.length > 0) {
+        loadRecentFile(args[0]);
+      }
+      break;
+    default:
+      console.warn("Action not recognized:", action);
+  }
+});
 
 /**
  * Helper function for summary updates
@@ -634,13 +717,7 @@ async function updateFocusSummary() {
       }
       appState.loomTree.updateNode(currentFocus, newPrompt, summary);
 
-      // Update search index
-      if (searchManager) {
-        searchManager.updateNode(
-          currentFocus,
-          appState.loomTree.renderNode(currentFocus)
-        );
-      }
+      updateSearchIndexForNode(currentFocus);
     } catch (error) {
       appState.loomTree.updateNode(
         currentFocus,
@@ -648,132 +725,63 @@ async function updateFocusSummary() {
         "Server Response Error"
       );
 
-      // Update search index
-      if (searchManager) {
-        searchManager.updateNode(
-          currentFocus,
-          appState.loomTree.renderNode(currentFocus)
-        );
-      }
+      updateSearchIndexForNode(currentFocus);
     }
     appState.updatingNode = false;
   }
 }
 
-/**
- * Service Configuration
- */
-function createLLMServiceConfig() {
-  return {
-    autoSaveTick: autoSaveTick,
-    updateFocusSummary: updateFocusSummary,
-    setFocus: newFocus => {
-      updateFocus(newFocus.id, "llm-generation");
-    },
-    updateLoomTree: newLoomTree => {
-      appState.loomTree = newLoomTree;
-    },
-    updateEditor: newEditor => {
-      Object.assign(DOM.editor, newEditor);
-    },
-    updateNodeMetadata: (nodeId, metadata) => {
-      if (appState.loomTree.nodeStore[nodeId]) {
-        Object.assign(appState.loomTree.nodeStore[nodeId], metadata);
-      }
-    },
-    updateTreeView: () => {
-      if (treeNav) {
-        treeNav.updateTreeView();
-      }
-    },
-    getFocus: () => appState.getFocusedNode(),
-    getLoomTree: () => appState.getLoomTree(),
-    getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
-    getEditor: () => DOM.editor,
-    setEditorReadOnly: readOnly => {
-      DOM.editor.readOnly = readOnly;
-    },
-    getSamplerSettings: () => ({
-      selectedServiceName: DOM.serviceSelector?.value || "",
-      selectedSamplerName: DOM.samplerSelector?.value || "",
-      selectedApiKeyName: DOM.apiKeySelector?.value || "",
-    }),
-    setLoading: function (isLoading) {
-      DOM.editor.readOnly = isLoading;
-      if (DOM.die) {
-        DOM.die.classList.toggle("rolling", isLoading);
-      }
-    },
-    showError: message => {
-      console.warn("Global error:", message);
-      // Trigger UI update to show the error
-      updateErrorDisplay();
-    },
-    clearErrors: () => {
-      clearFocusedNodeError();
-    },
-    updateSearchIndex: (node, fullText) => {
-      if (searchManager) {
-        searchManager.addNodeToSearchIndex(node, fullText);
-      }
-    },
-  };
-}
-
-/**
- * Initialization
- */
 async function init() {
   try {
     await loadSettings();
 
-    llmService = new LLMService(createLLMServiceConfig());
+    // Notify main process that renderer is ready and get any initial data (used to restore temp file after error)
+    const initialData = await window.electronAPI.rendererReady();
+    if (initialData) {
+      await loadFileData(initialData);
+    }
 
-    treeNav = new TreeNav(
-      nodeId => {
-        updateFocus(nodeId, "tree-navigation");
-      },
-      {
-        getFocus: () => appState.getFocusedNode(),
-        getLoomTree: () => appState.getLoomTree(),
-      }
-    );
-
-    searchManager = new SearchManager({
-      focusOnNode: nodeId => {
-        if (nodeId) {
-          updateFocus(nodeId, "search-result");
-        } else {
-          const focusedNode = appState.getFocusedNode();
-          if (focusedNode) {
-            updateFocus(focusedNode.id, "search-result");
-          }
-        }
-      },
-      loomTree: appState.getLoomTree(),
-      treeNav: treeNav,
-    });
-
-    // Make services globally available
-    window.llmService = llmService;
-    window.treeNav = treeNav;
-    window.searchManager = searchManager;
-
-    // Initialize tree view
-    treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
+    initializeServices();
 
     // Set up event listeners
     window.electronAPI.onSettingsUpdated(onSettingsUpdated);
-    setupElectronHandlers();
     setupEditorHandlers();
-    setupEventHandlers();
 
-    // Populate selectors
+    window.electronAPI.onLoadInitialData(async (event, initialData) => {
+      try {
+        if (initialData && initialData.data) {
+          await loadFileData(initialData.data);
+        } else if (initialData && initialData.data === null) {
+          // Create a fresh loom by resetting the app state
+          appState.loomTree = new LoomTree();
+          appState.focusedNode = appState.loomTree.root;
+
+          // Recreate services with fresh data
+          initializeServices();
+
+          // Update UI
+          updateUI();
+        }
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+        console.error("Error stack:", error.stack);
+      }
+    });
+
+    // Set up final save request handler
+    window.electronAPI.onRequestFinalSave(async event => {
+      try {
+        await autoSave();
+      } catch (error) {
+        console.error("Error in final save:", error);
+      }
+    });
+
+    // Populate settings selectors
     populateServiceSelector();
     populateSamplerSelector();
     populateApiKeySelector();
     renderFavoritesButtons();
-    addSettingsChangeListeners();
 
     // Initial render
     updateUI();
@@ -781,6 +789,48 @@ async function init() {
     // Rebuild search index with current data
     if (searchManager) {
       searchManager.rebuildIndex();
+    }
+
+    // Set up additional event handlers
+    if (DOM.thumbUp) {
+      DOM.thumbUp.onclick = () => handleThumbRating(true);
+    }
+
+    if (DOM.thumbDown) {
+      DOM.thumbDown.onclick = () => handleThumbRating(false);
+    }
+
+    // Settings labels
+    if (DOM.serviceLabel) {
+      DOM.serviceLabel.style.cursor = "pointer";
+      DOM.serviceLabel.onclick = () =>
+        window.electronAPI.openSettingsToTab("services");
+    }
+
+    if (DOM.apiKeyLabel) {
+      DOM.apiKeyLabel.style.cursor = "pointer";
+      DOM.apiKeyLabel.onclick = () =>
+        window.electronAPI.openSettingsToTab("api-keys");
+    }
+
+    if (DOM.samplerLabel) {
+      DOM.samplerLabel.style.cursor = "pointer";
+      DOM.samplerLabel.onclick = () =>
+        window.electronAPI.openSettingsToTab("samplers");
+    }
+
+    // Error close button handler
+    if (DOM.errorCloseButton) {
+      DOM.errorCloseButton.onclick = clearFocusedNodeError;
+    }
+
+    // Generate button handler
+    if (DOM.generateButton) {
+      DOM.generateButton.onclick = () => {
+        if (llmService && appState.focusedNode) {
+          llmService.generateNewResponses(appState.focusedNode.id);
+        }
+      };
     }
 
     // Check for new user setup
@@ -793,5 +843,4 @@ async function init() {
 // Initialize when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   init();
-  updateCounterDisplay(DOM.editor.value || "");
 });

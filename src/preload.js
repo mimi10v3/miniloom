@@ -3,8 +3,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 const DiffMatchPatch = require("diff-match-patch");
 const MiniSearch = require("minisearch");
 
-console.log("Preload script loaded successfully");
-
 // Store MiniSearch instance in preload script
 let searchIndex = null;
 
@@ -13,6 +11,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // File operations (need main process)
   saveFile: data => ipcRenderer.invoke("save-file", data),
   loadFile: () => ipcRenderer.invoke("load-file"),
+  loadRecentFile: filePath => ipcRenderer.invoke("load-recent-file", filePath),
+  newLoom: () => ipcRenderer.invoke("new-loom"),
+  rendererReady: () => ipcRenderer.invoke("renderer-ready"),
   autoSave: data => ipcRenderer.invoke("auto-save", data),
 
   // Settings operations
@@ -44,6 +45,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onInvokeAction: callback => {
     ipcRenderer.on("invoke-action", callback);
     return () => ipcRenderer.removeAllListeners("invoke-action");
+  },
+
+  onLoadInitialData: callback => {
+    ipcRenderer.on("load-initial-data", callback);
+    return () => ipcRenderer.removeAllListeners("load-initial-data");
+  },
+
+  onRequestFinalSave: callback => {
+    ipcRenderer.on("request-final-save", callback);
+    return () => ipcRenderer.removeAllListeners("request-final-save");
   },
 
   // Context menu
