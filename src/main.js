@@ -221,10 +221,9 @@ function createWindow(initialData = null) {
         mainWindow.show();
       });
 
-      mainWindow.webContents.on("console-message", (event, params) => {
-        console.log(
-          `Renderer [${params.level}]: ${params.message} (${params.sourceId}:${params.line})`
-        );
+      mainWindow.webContents.on("console-message", event => {
+        const { level, message, line, sourceId } = event;
+        console.log(`Renderer [${level}]: ${message} (${sourceId}:${line})`);
       });
 
       mainWindow.on("unresponsive", () => {
@@ -527,12 +526,6 @@ ipcMain.handle("new-loom", async event => {
       tempFilePath,
       true
     ); // isTemp = true
-
-    // Send empty data to clear the current loom
-    mainWindow.webContents.send("load-initial-data", {
-      filePath: tempFilePath,
-      data: null,
-    });
   }
 });
 

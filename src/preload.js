@@ -111,7 +111,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   searchIndexRemoveAll: () => {
     if (searchIndex) {
-      return searchIndex.removeAll();
+      searchIndex.removeAll();
+      return true;
     }
     return false;
   },
