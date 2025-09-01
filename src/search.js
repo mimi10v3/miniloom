@@ -96,9 +96,6 @@ class SearchManager {
       });
 
       // Add all existing nodes to the index
-      console.log(
-        `SearchManager: Rebuilding search index with ${Object.keys(this.loomTree.nodeStore).length} nodes`
-      );
       Object.keys(this.loomTree.nodeStore).forEach(nodeId => {
         const node = this.loomTree.nodeStore[nodeId];
         if (node) {
