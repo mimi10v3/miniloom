@@ -1,4 +1,4 @@
-<p align="center" style="font-size:48px;">
+<p align="left" style="font-size:48px;">
   <img src="assets/minihf_logo_no_text.png" alt="vector art logo of the brain patterned in the style of a pictorial history of Portuguese textiles, painted in the 1700s" width="50" height="50">
   MiniLoom
 </p>
@@ -8,7 +8,7 @@ MiniLoom is a desktop application for AI text generation.
 ## Features
 
 - Desktop application with native UI
-- Text generation capabilities from a variety of LLM APIs
+- Text generation capabilities from a variety of LLM APIs (supports OpenAI Completions and Chat formats, you specify the URL; verified to work with Together, OpenRouter, VLLM, OpenAI, X AI, Google AI, Anthropic)
 - File save/load functionality
 - Settings management
 - Text search functionality
@@ -56,6 +56,12 @@ When you first open MiniLoom, the app will automatically detect that you're a ne
    - Use the tree view on the left to navigate between different generations
    - Click on any node to focus on it and continue from that point
    - Use thumbs up/down to rate responses
+
+## Getting Help
+
+- 💬 **Questions & Discussion**: Join our [Discord](https://discord.gg/Y3HGwrcPwr)
+- 🐛 **Bug Reports**: Use GitHub issues (confirmed bugs only)
+- 💡 **Feature Ideas**: Discuss in Discord first, then create a GitHub issue
 
 ## Prerequisites
 
