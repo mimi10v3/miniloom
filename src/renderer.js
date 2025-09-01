@@ -74,106 +74,6 @@ const DOM = {
   editorCharChange: document.getElementById("editor-char-change"),
 };
 
-/**
- * Initialize or reinitialize all services with current app state
- */
-function initializeServices() {
-  llmService = new LLMService({
-    autoSaveTick: autoSaveTick,
-    updateFocusSummary: updateFocusSummary,
-    setFocus: newFocus => {
-      updateFocus(newFocus.id, "llm-generation");
-    },
-    updateLoomTree: newLoomTree => {
-      appState.loomTree = newLoomTree;
-    },
-    updateEditor: newEditor => {
-      Object.assign(DOM.editor, newEditor);
-    },
-    updateNodeMetadata: (nodeId, metadata) => {
-      if (appState.loomTree.nodeStore[nodeId]) {
-        Object.assign(appState.loomTree.nodeStore[nodeId], metadata);
-      }
-    },
-    updateTreeView: () => {
-      if (treeNav) {
-        treeNav.updateTreeView();
-      }
-    },
-    getFocus: () => appState.getFocusedNode(),
-    getLoomTree: () => appState.getLoomTree(),
-    getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
-    getEditor: () => DOM.editor,
-    setEditorReadOnly: readOnly => {
-      DOM.editor.readOnly = readOnly;
-    },
-    getSamplerSettings: () => ({
-      selectedServiceName: DOM.serviceSelector?.value || "",
-      selectedSamplerName: DOM.samplerSelector?.value || "",
-      selectedApiKeyName: DOM.apiKeySelector?.value || "",
-    }),
-    setLoading: function (isLoading) {
-      DOM.editor.readOnly = isLoading;
-      if (DOM.die) {
-        DOM.die.classList.toggle("rolling", isLoading);
-      }
-    },
-    showError: message => {
-      console.warn("Global error:", message);
-      // Trigger UI update to show the error
-      updateErrorDisplay();
-    },
-    clearErrors: () => {
-      clearFocusedNodeError();
-    },
-    updateSearchIndex: (node, fullText) => {
-      if (searchManager) {
-        searchManager.addNodeToSearchIndex(node, fullText);
-      }
-    },
-  });
-
-  // Create tree navigation service
-  treeNav = new TreeNav(
-    nodeId => {
-      updateFocus(nodeId, "tree-navigation");
-    },
-    {
-      getFocus: () => appState.getFocusedNode(),
-      getLoomTree: () => appState.getLoomTree(),
-    }
-  );
-
-  // Create search manager
-  searchManager = new SearchManager({
-    focusOnNode: nodeId => {
-      if (nodeId) {
-        updateFocus(nodeId, "search-result");
-      } else {
-        const focusedNode = appState.getFocusedNode();
-        if (focusedNode) {
-          updateFocus(focusedNode.id, "search-result");
-        }
-      }
-    },
-    loomTree: appState.getLoomTree(),
-    treeNav: treeNav,
-  });
-
-  // Make services globally available
-  window.llmService = llmService;
-  window.treeNav = treeNav;
-  window.searchManager = searchManager;
-
-  // Initialize tree view
-  treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
-
-  // Rebuild search index
-  if (searchManager) {
-    searchManager.rebuildIndex();
-  }
-}
-
 /*
  * Updates UI focus to the node corresponding to nodeId
  */
@@ -202,7 +102,6 @@ function updateUI() {
     return;
   }
 
-  // Update editor
   DOM.editor.value = appState.focusedNode.cachedRenderText;
 
   updateTreeStatsDisplay();
@@ -212,10 +111,6 @@ function updateUI() {
 
   if (treeNav) {
     treeNav.updateTreeView();
-  }
-
-  if (window.searchManager) {
-    window.searchManager.rebuildIndex();
   }
 }
 
@@ -574,8 +469,14 @@ async function loadFileData(data) {
       );
     }
 
-    // Recreate services with new data
-    initializeServices();
+    // Update existing services with new data
+    if (searchManager) {
+      searchManager.updateLoomTree(newLoomTree);
+      searchManager.rebuildIndex();
+    }
+    if (treeNav) {
+      treeNav.renderTree(newLoomTree.root, DOM.loomTreeView);
+    }
 
     // Render the new state
     updateUI();
@@ -697,6 +598,36 @@ window.electronAPI.onInvokeAction((event, action, ...args) => {
 });
 
 /**
+ * Initialize a fresh loom state - shared logic for new loom creation
+ * This function handles the core initialization that happens both on app startup
+ * (when no temp file exists) and when user creates a new loom
+ */
+function initializeFreshLoom() {
+  // Create fresh loom tree
+  appState.loomTree = new LoomTree();
+  appState.focusedNode = appState.loomTree.root;
+
+  // Reset editor to empty state
+  DOM.editor.value = "";
+  DOM.editor.readOnly = false;
+
+  // Update existing services with fresh data
+  if (searchManager) {
+    searchManager.updateLoomTree(appState.loomTree);
+    searchManager.rebuildIndex();
+  }
+  if (treeNav) {
+    treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
+  }
+
+  // Update all UI components
+  updateUI();
+
+  // Trigger auto-save to create temp file
+  autoSave();
+}
+
+/**
  * Helper function for summary updates
  */
 async function updateFocusSummary() {
@@ -739,9 +670,92 @@ async function init() {
     const initialData = await window.electronAPI.rendererReady();
     if (initialData) {
       await loadFileData(initialData);
+    } else {
+      // No temp file exists, create basic fresh state
+      appState.loomTree = new LoomTree();
+      appState.focusedNode = appState.loomTree.root;
+      DOM.editor.value = "";
+      DOM.editor.readOnly = false;
     }
 
-    initializeServices();
+    // Initialize services (needed for both loaded files and fresh state)
+    llmService = new LLMService({
+      autoSaveTick: autoSaveTick,
+      updateFocusSummary: updateFocusSummary,
+      setFocus: newFocus => {
+        updateFocus(newFocus.id, "llm-generation");
+      },
+      updateNodeMetadata: (nodeId, metadata) => {
+        if (appState.loomTree.nodeStore[nodeId]) {
+          Object.assign(appState.loomTree.nodeStore[nodeId], metadata);
+        }
+      },
+      updateTreeView: () => {
+        if (treeNav) {
+          treeNav.updateTreeView();
+        }
+      },
+      getFocus: () => appState.getFocusedNode(),
+      getLoomTree: () => appState.getLoomTree(),
+      getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
+      getEditor: () => DOM.editor,
+      getSamplerSettings: () => ({
+        selectedServiceName: DOM.serviceSelector?.value || "",
+        selectedSamplerName: DOM.samplerSelector?.value || "",
+        selectedApiKeyName: DOM.apiKeySelector?.value || "",
+      }),
+      setLoading: function (isLoading) {
+        DOM.editor.readOnly = isLoading;
+        if (DOM.die) {
+          DOM.die.classList.toggle("rolling", isLoading);
+        }
+      },
+      showError: message => {
+        console.warn("Global error:", message);
+        // Trigger UI update to show the error
+        updateErrorDisplay();
+      },
+      updateSearchIndex: (node, fullText) => {
+        if (searchManager) {
+          searchManager.addNodeToSearchIndex(node, fullText);
+        }
+      },
+    });
+
+    // Create tree navigation service
+    treeNav = new TreeNav(
+      nodeId => {
+        updateFocus(nodeId, "tree-navigation");
+      },
+      {
+        getFocus: () => appState.getFocusedNode(),
+        getLoomTree: () => appState.getLoomTree(),
+      }
+    );
+
+    // Create search manager
+    searchManager = new SearchManager({
+      focusOnNode: nodeId => {
+        if (nodeId) {
+          updateFocus(nodeId, "search-result");
+        } else {
+          const focusedNode = appState.getFocusedNode();
+          if (focusedNode) {
+            updateFocus(focusedNode.id, "search-result");
+          }
+        }
+      },
+      loomTree: appState.getLoomTree(),
+      treeNav: treeNav,
+    });
+
+    // Make services globally available
+    window.llmService = llmService;
+    window.treeNav = treeNav;
+    window.searchManager = searchManager;
+
+    // Initialize tree view
+    treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
 
     // Set up event listeners
     window.electronAPI.onSettingsUpdated(onSettingsUpdated);
@@ -751,19 +765,18 @@ async function init() {
       try {
         if (initialData && initialData.data) {
           await loadFileData(initialData.data);
-        } else if (initialData && initialData.data === null) {
-          // Create a fresh loom by resetting the app state
-          appState.loomTree = new LoomTree();
-          appState.focusedNode = appState.loomTree.root;
-
-          // Recreate services with fresh data
-          initializeServices();
-
-          // Update UI
-          updateUI();
         }
       } catch (error) {
         console.error("Error loading initial data:", error);
+        console.error("Error stack:", error.stack);
+      }
+    });
+
+    window.electronAPI.onResetToNewLoom(async event => {
+      try {
+        initializeFreshLoom();
+      } catch (error) {
+        console.error("Error resetting to new loom:", error);
         console.error("Error stack:", error.stack);
       }
     });
@@ -782,14 +795,6 @@ async function init() {
     populateSamplerSelector();
     populateApiKeySelector();
     renderFavoritesButtons();
-
-    // Initial render
-    updateUI();
-
-    // Rebuild search index with current data
-    if (searchManager) {
-      searchManager.rebuildIndex();
-    }
 
     // Set up additional event handlers
     if (DOM.thumbUp) {
@@ -832,6 +837,9 @@ async function init() {
         }
       };
     }
+
+    // Initial render and search index setup
+    updateUI();
 
     // Check for new user setup
     checkForNewUser();

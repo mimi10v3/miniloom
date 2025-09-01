@@ -518,6 +518,7 @@ ipcMain.handle("save-file", async (event, data) => {
 ipcMain.handle("new-loom", async event => {
   // Check for unsaved changes first
   if (await checkUnsavedChanges()) {
+    // Reset to temp file for new loom
     setCurrentFile(tempFilePath, true);
     mainWindow.webContents.send(
       "update-filename",
@@ -526,6 +527,9 @@ ipcMain.handle("new-loom", async event => {
       tempFilePath,
       true
     ); // isTemp = true
+
+    // Send a simple signal to reset the UI
+    mainWindow.webContents.send("reset-to-new-loom");
   }
 });
 
@@ -584,8 +588,8 @@ ipcMain.handle("load-recent-file", async (event, filePath) => {
           false
         );
 
-        // Send the data to the renderer
-        mainWindow.webContents.send("load-initial-data", { filePath, data });
+        // Return the data directly to the renderer
+        return data;
       } else {
         console.log("File not found, removing from recent files:", filePath);
         // Remove from recent files if it doesn't exist

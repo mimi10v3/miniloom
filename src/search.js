@@ -82,15 +82,13 @@ class SearchManager {
 
   initializeSearchIndex() {
     try {
-      // Use the safe API to create MiniSearch instance
       window.electronAPI.createMiniSearch({
-        fields: ["content", "summary", "type"],
+        fields: ["content", "summary"],
         storeFields: ["content", "summary", "type", "timestamp", "fullContent"],
         searchOptions: {
           boost: {
             content: 3,
             summary: 2,
-            type: 1,
           },
           prefix: true,
           fuzzy: 0.2,
@@ -98,6 +96,9 @@ class SearchManager {
       });
 
       // Add all existing nodes to the index
+      console.log(
+        `SearchManager: Rebuilding search index with ${Object.keys(this.loomTree.nodeStore).length} nodes`
+      );
       Object.keys(this.loomTree.nodeStore).forEach(nodeId => {
         const node = this.loomTree.nodeStore[nodeId];
         if (node) {

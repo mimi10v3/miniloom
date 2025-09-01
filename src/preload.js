@@ -52,6 +52,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeAllListeners("load-initial-data");
   },
 
+  onResetToNewLoom: callback => {
+    ipcRenderer.on("reset-to-new-loom", callback);
+    return () => ipcRenderer.removeAllListeners("reset-to-new-loom");
+  },
+
   onRequestFinalSave: callback => {
     ipcRenderer.on("request-final-save", callback);
     return () => ipcRenderer.removeAllListeners("request-final-save");
