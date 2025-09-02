@@ -146,7 +146,7 @@ function createWindow(initialData = null) {
       {
         label: "LLM Settings",
         accelerator: "CmdOrCtrl+P",
-        click: openSettingsWindow,
+        click: () => openSettingsWindow(),
       },
       { type: "separator" },
       {
@@ -187,10 +187,48 @@ function createWindow(initialData = null) {
     );
     if (editMenuIndex >= 0) {
       existingMenuTemplate[editMenuIndex].submenu = [
-        ...existingMenuTemplate[editMenuIndex].submenu,
-        { type: "separator" },
         ...editMenuItems,
+        { type: "separator" },
+        ...existingMenuTemplate[editMenuIndex].submenu,
       ];
+    }
+
+    // Add Help menu
+    const helpMenuItems = [
+      {
+        label: "Get Help (Discord)",
+        click: () => {
+          require("electron").shell.openExternal(
+            "https://discord.gg/Y3HGwrcPwr"
+          );
+        },
+      },
+      {
+        label: "Report Issues (GitHub)",
+        click: () => {
+          require("electron").shell.openExternal(
+            "https://github.com/JD-P/miniloom"
+          );
+        },
+      },
+    ];
+
+    // Check if Help menu already exists
+    const helpMenuIndex = existingMenuTemplate.findIndex(
+      item => item.label === "Help"
+    );
+    if (helpMenuIndex >= 0) {
+      // Replace existing Help menu
+      existingMenuTemplate[helpMenuIndex] = {
+        label: "Help",
+        submenu: helpMenuItems,
+      };
+    } else {
+      // Add new Help menu at the end
+      existingMenuTemplate.push({
+        label: "Help",
+        submenu: helpMenuItems,
+      });
     }
 
     // Build and set the new menu
@@ -288,7 +326,7 @@ function openSettingsWindow(tabName = null) {
   modal.once("ready-to-show", () => {
     modal.show();
     // Send the tab name to the settings window if provided
-    if (tabName) {
+    if (tabName && typeof tabName === "string") {
       modal.webContents.send("open-to-tab", tabName);
     }
   });
