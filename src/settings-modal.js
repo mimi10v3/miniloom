@@ -40,6 +40,19 @@ const SERVICE_DEFAULTS = {
     "service-model-name": "gpt-5",
     "service-api-delay": "3000",
   },
+  anthropic: {
+    "sampling-method": "anthropic",
+    "service-api-url": "https://api.anthropic.com/v1/messages",
+    "service-model-name": "claude-3-5-sonnet-20241022",
+    "service-api-delay": "3000",
+  },
+  google: {
+    "sampling-method": "google",
+    "service-api-url":
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+    "service-model-name": "gemini-2.0-flash",
+    "service-api-delay": "3000",
+  },
 };
 
 const DEFAULT_SAMPLER = {

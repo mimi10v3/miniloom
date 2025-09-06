@@ -25,6 +25,28 @@ class HTTPClient {
   static async extractErrorMessage(response) {
     try {
       const errorData = await response.json();
+
+      // Handle OpenRouter provider errors with detailed metadata
+      if (errorData.error && errorData.error.metadata) {
+        const metadata = errorData.error.metadata;
+        const baseMessage =
+          errorData.error.message || "Provider returned error";
+
+        // Extract provider-specific information
+        let detailedMessage = baseMessage;
+
+        if (metadata.raw) {
+          detailedMessage += `: ${metadata.raw}`;
+        }
+
+        if (metadata.provider_name) {
+          detailedMessage += ` (Provider: ${metadata.provider_name})`;
+        }
+
+        return detailedMessage;
+      }
+
+      // Fallback to standard error message extraction
       return errorData.error?.message || response.statusText;
     } catch (jsonError) {
       try {
@@ -57,6 +79,8 @@ class APIClient {
         return this.togetherProvider(endpoint, prompt, params);
       case "anthropic":
         return this.anthropicProvider(endpoint, prompt, params);
+      case "google":
+        return this.googleProvider(endpoint, prompt, params);
       default:
         throw new Error(`Unknown provider type: ${providerType}`);
     }
@@ -233,27 +257,93 @@ class APIClient {
       "x-api-key": params.apiKey,
       "anthropic-version": "2023-06-01",
     };
-    const requestBody = {
-      model: params.modelName,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: Number(params.tokensPerBranch),
-      temperature: Number(params.temperature),
-      top_p: Number(params.topP),
+    const apiDelay = Number(params.delay || 0);
+
+    const batchPromises = [];
+    const calls = params.outputBranches;
+
+    for (let i = 1; i <= calls; i++) {
+      const requestBody = {
+        model: params.modelName,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: Number(params.tokensPerBranch),
+        temperature: Number(params.temperature),
+        top_p: Number(params.topP),
+      };
+
+      const promise = HTTPClient.delay(apiDelay * i)
+        .then(() => {
+          return HTTPClient.makeRequest(endpoint, {
+            headers,
+            body: requestBody,
+          });
+        })
+        .then(response => {
+          return [
+            {
+              text: response.content[0].text,
+              model: response.model,
+              finish_reason: response.stop_reason,
+            },
+          ];
+        });
+
+      batchPromises.push(promise);
+    }
+
+    const batch = await Promise.all(batchPromises);
+    return batch.flat();
+  }
+
+  static async googleProvider(endpoint, prompt, params) {
+    const headers = {
+      "Content-Type": "application/json",
+      "X-goog-api-key": params.apiKey,
     };
+    const apiDelay = Number(params.delay || 0);
 
-    const response = await HTTPClient.makeRequest(endpoint, {
-      headers,
-      body: requestBody,
-    });
+    const batchPromises = [];
+    const calls = params.outputBranches;
 
-    // Extract finish reasons from Anthropic response
-    return [
-      {
-        text: response.content[0].text,
-        model: response.model,
-        finish_reason: response.stop_reason,
-      },
-    ];
+    for (let i = 1; i <= calls; i++) {
+      const requestBody = {
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: Number(params.tokensPerBranch),
+          temperature: Number(params.temperature),
+          topP: Number(params.topP),
+          topK: Number(params.topK),
+        },
+      };
+
+      const promise = HTTPClient.delay(apiDelay * i)
+        .then(() => {
+          return HTTPClient.makeRequest(endpoint, {
+            headers,
+            body: requestBody,
+          });
+        })
+        .then(response => {
+          return response.candidates.map(candidate => ({
+            text: candidate.content.parts[0].text,
+            model: response.model || params.modelName,
+            finish_reason: candidate.finishReason || "stop",
+          }));
+        });
+
+      batchPromises.push(promise);
+    }
+
+    const batch = await Promise.all(batchPromises);
+    return batch.flat();
   }
 }
 
@@ -361,6 +451,7 @@ class LLMService {
         "openrouter",
         "together",
         "anthropic",
+        "google",
       ].includes(samplingMethod)
     ) {
       const summaryParams = {
@@ -377,16 +468,7 @@ class LLMService {
           summaryParams
         );
 
-        if (samplingMethod === "openai-chat") {
-          return window.utils.extractThreeWords(response[0].text);
-        } else if (samplingMethod === "anthropic") {
-          return window.utils.extractThreeWords(response[0].text);
-        } else if (samplingMethod === "base") {
-          return window.utils.extractThreeWords(response[0].text);
-        } else {
-          // openai, openrouter, together
-          return window.utils.extractThreeWords(response[0].text);
-        }
+        return window.utils.extractThreeWords(response[0].text);
       } catch (error) {
         console.warn("Summary generation failed:", error);
         return "Summary Failed";
@@ -409,6 +491,7 @@ class LLMService {
       openrouter: () => this.generateWithProvider(nodeId, "openrouter"),
       together: () => this.generateWithProvider(nodeId, "together"),
       anthropic: () => this.generateWithProvider(nodeId, "anthropic"),
+      google: () => this.generateWithProvider(nodeId, "google"),
     };
 
     const method = methodMap[samplingMethod] || methodMap["base"];
