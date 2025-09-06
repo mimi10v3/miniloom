@@ -43,6 +43,7 @@ const DOM = {
   nodeDepth: document.getElementById("node-depth"),
   nodePosition: document.getElementById("node-position"),
   nodeCreatedTime: document.getElementById("node-created-time"),
+  nodeTimestamp: document.getElementById("node-timestamp"),
   nodeMetadata: document.getElementById("node-metadata"),
   finishReason: document.getElementById("finish-reason"),
   subtreeInfo: document.getElementById("subtree-info"),
@@ -63,10 +64,8 @@ const DOM = {
   loomTreeView: document.getElementById("loom-tree-view"),
   // Tree stats elements
   treeTotalNodes: document.getElementById("tree-total-nodes"),
-  treeMaxDepth: document.getElementById("tree-max-depth"),
-  treeMaxWords: document.getElementById("tree-max-words"),
-  treeMaxChars: document.getElementById("tree-max-chars"),
-  treeLastUpdate: document.getElementById("tree-last-update"),
+  treeStatsSummary: document.getElementById("tree-stats-summary"),
+  treeStatsTooltip: document.getElementById("tree-stats-tooltip"),
   // Editor stats elements
   editorWordCount: document.getElementById("editor-word-count"),
   editorWordChange: document.getElementById("editor-word-change"),
@@ -151,20 +150,21 @@ function updateTreeStatsDisplay() {
   const lastUpdateTime =
     rootNode.treeStats.lastChildUpdate || new Date(rootNode.timestamp);
 
-  // Update tree stats
-  if (DOM.treeTotalNodes)
+  if (DOM.treeTotalNodes) {
     DOM.treeTotalNodes.textContent = rootNode.treeStats.totalChildNodes;
-  if (DOM.treeMaxDepth)
-    DOM.treeMaxDepth.textContent = rootNode.treeStats.maxChildDepth;
-  if (DOM.treeMaxWords)
-    DOM.treeMaxWords.textContent = rootNode.treeStats.maxWordCountOfChildren;
-  if (DOM.treeMaxChars)
-    DOM.treeMaxChars.textContent =
-      rootNode.treeStats.maxCharCountOfChildren || 0;
-  if (DOM.treeLastUpdate) {
-    DOM.treeLastUpdate.textContent = lastUpdateTime
-      ? window.utils.formatTimestamp(lastUpdateTime)
-      : "N/A";
+  }
+  if (DOM.treeStatsSummary) {
+    const tooltipText =
+      `🍃 Total nodes: ${rootNode.treeStats.totalChildNodes}\n` +
+      `📏 Max depth: ${rootNode.treeStats.maxChildDepth}\n` +
+      `🕐 Last: ${lastUpdateTime ? window.utils.formatTimestamp(lastUpdateTime) : "N/A"}\n` +
+      `📝 Max words: ${rootNode.treeStats.maxWordCountOfChildren}\n` +
+      `🔤 Max chars: ${rootNode.treeStats.maxCharCountOfChildren || 0}\n` +
+      `🌱 Unread nodes: ${rootNode.treeStats.unreadChildNodes || 0}\n` +
+      `👍 Rated Good: ${rootNode.treeStats.ratedUpNodes || 0}\n` +
+      `👎 Rated Bad: ${rootNode.treeStats.ratedDownNodes || 0}\n` +
+      `🔥 Recent nodes (5min): ${rootNode.treeStats.recentNodes || 0}`;
+    DOM.treeStatsSummary.setAttribute("data-tooltip-content", tooltipText);
   }
 
   // Update editor footer stats
@@ -192,16 +192,21 @@ function updateTreeStatsDisplay() {
 function updateFocusedNodeStats() {
   const focusedNode = appState.focusedNode;
 
-  DOM.nodeSummary.textContent = focusedNode.summary || "Untitled";
+  DOM.nodeSummary.textContent = focusedNode.summary || "Unsaved";
   DOM.nodeAuthor.textContent =
     focusedNode.type === "user" ? "Human" : focusedNode.model || "Unknown";
   DOM.nodeAuthorEmoji.textContent = focusedNode.type === "gen" ? "🤖" : "👤";
-  DOM.nodePosition.innerHTML = `<strong>📍 ${focusedNode.id}: </strong>`;
+  DOM.nodePosition.innerHTML = `<strong>📍 ${focusedNode.id}:&nbsp</strong>`;
 
-  // Build metadata line
+  // Update timestamp
   const formattedDate = window.utils.formatTimestamp(focusedNode.timestamp);
+  if (DOM.nodeTimestamp) {
+    DOM.nodeTimestamp.textContent = `🕐 ${formattedDate}`;
+  }
+
+  // Update metadata (depth only)
   if (DOM.nodeMetadata) {
-    DOM.nodeMetadata.textContent = `🕐 ${formattedDate} | 📏 ${focusedNode.depth}`;
+    DOM.nodeMetadata.textContent = `📏 ${focusedNode.depth}`;
   }
 
   // Display finish reason if available
@@ -228,20 +233,11 @@ function updateFocusedNodeStats() {
       DOM.subtreeTotal.textContent = focusedNode.treeStats.totalChildNodes;
       DOM.subtreeInfo.style.display = "inline";
 
-      const subtreeDate = window.utils.formatTimestamp(
-        focusedNode.treeStats.lastChildUpdate || focusedNode.timestamp
-      );
       DOM.subtreeInfo.setAttribute(
         "data-tooltip",
-        `Subtree stats:\n` +
-          `Total nodes: ${focusedNode.treeStats.totalChildNodes}\n` +
-          `Direct children: ${focusedNode.children.length}\n` +
-          `Max depth: ${focusedNode.treeStats.maxChildDepth}\n` +
-          `Max words: ${focusedNode.treeStats.maxWordCountOfChildren}\n` +
-          `Max chars: ${focusedNode.treeStats.maxCharCountOfChildren}\n` +
-          `Last update: ${subtreeDate}`
+        window.utils.generateSubtreeTooltipText(focusedNode)
       );
-      DOM.subtreeInfo.textContent = ` | 🍃 ${focusedNode.children.length}/${focusedNode.treeStats.totalChildNodes}`;
+      DOM.subtreeInfo.textContent = `🍃 ${focusedNode.treeStats.totalChildNodes} nodes`;
     } else {
       DOM.subtreeInfo.style.display = "none";
     }
@@ -292,13 +288,13 @@ function updateSearchIndexForNode(node) {
  */
 function updateThumbState() {
   if (DOM.thumbUp && DOM.thumbDown) {
-    DOM.thumbUp.classList.remove("chosen");
-    DOM.thumbDown.classList.remove("chosen");
+    DOM.thumbUp.classList.remove("chosen", "thumbs-up");
+    DOM.thumbDown.classList.remove("chosen", "thumbs-down");
 
     if (appState.focusedNode.rating === true) {
-      DOM.thumbUp.classList.add("chosen");
+      DOM.thumbUp.classList.add("chosen", "thumbs-up");
     } else if (appState.focusedNode.rating === false) {
-      DOM.thumbDown.classList.add("chosen");
+      DOM.thumbDown.classList.add("chosen", "thumbs-down");
     }
   }
 }
@@ -335,6 +331,9 @@ function setupEditorHandlers() {
       );
 
       updateSearchIndex(child, appState.loomTree.renderNode(child));
+
+      // Update tree stats display to show new recent node
+      updateTreeStatsDisplay();
 
       updateFocus(child.id, "editor-auto-save");
     }
@@ -519,6 +518,26 @@ async function autoSaveTick() {
 
 var autoSaveIntervalId = setInterval(autoSaveTick, 1000);
 
+// Tree stats recalculation timer - recalculate every minute to update recent nodes
+function treeStatsRecalcTick() {
+  // Trigger full recalculation of tree stats to update recent nodes count
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  appState.loomTree.calculateAllNodeStats(
+    appState.loomTree.root,
+    fiveMinutesAgo
+  );
+
+  // Update the UI to reflect the new stats
+  updateTreeStatsDisplay();
+
+  // Re-render the tree navigation to show updated badges
+  if (treeNav) {
+    treeNav.updateTreeView();
+  }
+}
+
+var treeStatsRecalcIntervalId = setInterval(treeStatsRecalcTick, 60000); // Every minute
+
 /**
  * Settings Management
  */
@@ -559,8 +578,8 @@ window.electronAPI.onUpdateFilename(
       const displayName = filename.replace(/\.json$/, "");
 
       if (isTemp) {
-        // For temp files, show "Untitled" in red with no hover info
-        filenameElement.innerHTML = `💾 <span style="color: red;">Untitled</span>`;
+        // For temp files, show "Unsaved" in red with no hover info
+        filenameElement.innerHTML = `💾 <span style="color: red;">Unsaved</span>`;
         filenameElement.title = ""; // No hover info for temp files
       } else {
         // For regular files, show filename with hover info
@@ -694,6 +713,7 @@ async function init() {
         if (treeNav) {
           treeNav.updateTreeView();
         }
+        updateTreeStatsDisplay();
       },
       getFocus: () => appState.getFocusedNode(),
       getLoomTree: () => appState.getLoomTree(),
@@ -836,6 +856,58 @@ async function init() {
           llmService.generateNewResponses(appState.focusedNode.id);
         }
       };
+    }
+
+    // Tree stats tooltip handlers
+    if (DOM.treeStatsSummary && DOM.treeStatsTooltip) {
+      DOM.treeStatsSummary.onmouseenter = () => {
+        const content = DOM.treeStatsSummary.getAttribute(
+          "data-tooltip-content"
+        );
+        if (content) {
+          DOM.treeStatsTooltip.textContent = content;
+
+          // Position tooltip below the stats element
+          const rect = DOM.treeStatsSummary.getBoundingClientRect();
+          DOM.treeStatsTooltip.style.left = rect.left + rect.width / 2 + "px";
+          DOM.treeStatsTooltip.style.top = rect.bottom + 4 + "px";
+          DOM.treeStatsTooltip.style.transform = "translateX(-50%)";
+
+          DOM.treeStatsTooltip.style.display = "block";
+        }
+      };
+
+      DOM.treeStatsSummary.onmouseleave = () => {
+        DOM.treeStatsTooltip.style.display = "none";
+      };
+
+      // Allow clicking to keep tooltip open
+      DOM.treeStatsSummary.onclick = () => {
+        const content = DOM.treeStatsSummary.getAttribute(
+          "data-tooltip-content"
+        );
+        if (content) {
+          DOM.treeStatsTooltip.textContent = content;
+
+          // Position tooltip below the stats element
+          const rect = DOM.treeStatsSummary.getBoundingClientRect();
+          DOM.treeStatsTooltip.style.left = rect.left + rect.width / 2 + "px";
+          DOM.treeStatsTooltip.style.top = rect.bottom + 4 + "px";
+          DOM.treeStatsTooltip.style.transform = "translateX(-50%)";
+
+          DOM.treeStatsTooltip.style.display = "block";
+        }
+      };
+
+      // Close tooltip when clicking outside
+      document.addEventListener("click", e => {
+        if (
+          !DOM.treeStatsSummary.contains(e.target) &&
+          !DOM.treeStatsTooltip.contains(e.target)
+        ) {
+          DOM.treeStatsTooltip.style.display = "none";
+        }
+      });
     }
 
     // Initial render and search index setup

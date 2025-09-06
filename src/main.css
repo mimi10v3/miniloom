@@ -451,7 +451,7 @@ table.keys td:nth-child(2) {
   align-items: center;
   gap: 4px;
   transition: background-color 0.2s;
-  height: 36px;
+  height: 40px;
   white-space: nowrap;
 }
 
@@ -466,28 +466,63 @@ table.keys td:nth-child(2) {
 .thumbs {
   font-size: 1.3em;
   cursor: pointer;
-  height: 36px;
-  width: 36px;
+  height: 40px;
+  width: 40px;
   border-radius: 8px;
-  background-color: #007bff;
-  color: white;
-  border: none;
+  background-color: #f8f9fa;
+  color: #6c757d;
+  border: 2px solid #dee2e6;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.7;
+  opacity: 0.8;
   transition: all 0.2s;
-  margin-right: 4px;
+  margin-right: 0;
 }
 
 .thumbs:hover {
   opacity: 1;
-  background-color: #0056b3;
+  background-color: #e9ecef;
+  border-color: #adb5bd;
 }
 
 .thumbs.chosen {
-  background-color: #0056b3 !important;
+  background-color: #f8f9fa !important;
   opacity: 1 !important;
+  border-width: 3px !important;
+}
+
+.thumbs.chosen.thumbs-up {
+  background-color: rgba(40, 167, 69, 0.3) !important;
+  border-color: #28a745 !important;
+  color: #28a745 !important;
+}
+
+.thumbs.chosen.thumbs-up:hover {
+  background-color: rgba(40, 167, 69, 0.4) !important;
+  border-color: #28a745 !important;
+  color: #28a745 !important;
+}
+
+.thumbs.chosen.thumbs-down {
+  background-color: rgba(220, 53, 69, 0.3) !important;
+  border-color: #dc3545 !important;
+  color: #dc3545 !important;
+}
+
+.thumbs.chosen.thumbs-down:hover {
+  background-color: rgba(220, 53, 69, 0.4) !important;
+  border-color: #dc3545 !important;
+  color: #dc3545 !important;
+}
+
+/* Thumbs display container */
+.thumbs-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-right: 6px;
+  align-items: center;
 }
 
 /* ==========================================================================
@@ -586,7 +621,8 @@ table.keys td:nth-child(2) {
 
 .node-status {
   display: inline-block;
-  margin-right: 4px;
+  margin-left: -1px;
+  margin-right: 2px;
   font-size: 12px;
   line-height: 1;
   transition: all var(--transition-normal);
@@ -604,7 +640,7 @@ table.keys td:nth-child(2) {
 
 .node-status.status-unread {
   color: var(--unread-indicator);
-  font-weight: var(--font-weight-bold);
+  font-weight: normal;
 }
 
 .node-status.status-normal {

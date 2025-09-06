@@ -34,6 +34,7 @@ class Node {
     this.netWordsAdded = 0;
     this.characterCount = 0;
     this.wordCount = 0;
+    this.recentlyAdded = true;
     this.treeStats = new TreeStats();
   }
 }
@@ -46,6 +47,9 @@ class TreeStats {
     this.maxWordCountOfChildren = 0;
     this.maxCharCountOfChildren = 0;
     this.unreadChildNodes = 0;
+    this.ratedUpNodes = 0;
+    this.ratedDownNodes = 0;
+    this.recentNodes = 0; // Nodes created in the last X minutes
   }
 }
 
@@ -69,7 +73,15 @@ class LoomTree {
     this.nodeStore[newNodeId] = newNode;
 
     this.updateNodeStats(newNode);
-    this.updateParentStatsIncremental(newNode, 1, newNode.read ? 0 : 1);
+    // New nodes are always recent, so add 1 to recent count
+    this.updateParentStatsIncremental(
+      newNode,
+      1,
+      newNode.read ? 0 : 1,
+      0,
+      0,
+      1
+    );
 
     return newNode;
   }
@@ -82,20 +94,31 @@ class LoomTree {
     const parent = this.nodeStore[node.parent];
     const parentRenderedText = this.applyPatches(parent);
     node.patch = dmp.patch_make(parentRenderedText, text);
+
+    // Store the old recent status before updating timestamp
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const wasRecent = node.timestamp > fiveMinutesAgo;
+
     node.timestamp = Date.now();
     node.summary = summary;
 
-    this.updateNodeStats(node);
-    this.updateParentStatsIncremental(node, 0, 0);
+    this.updateNodeStats(node, fiveMinutesAgo);
+
+    // Determine if recent status changed and adjust count incrementally
+    const isNowRecent = node.timestamp > fiveMinutesAgo;
+    const recentChange = (isNowRecent ? 1 : 0) - (wasRecent ? 1 : 0);
+
+    this.updateParentStatsIncremental(node, 0, 0, 0, 0, recentChange);
   }
 
-  updateNodeStats(node) {
+  updateNodeStats(node, recentTimeThreshold) {
     const renderedText = this.applyPatches(node);
     node.cachedRenderText = renderedText;
 
     const textStats = window.utils.calculateTextStats(renderedText);
     node.characterCount = textStats.charCount;
     node.wordCount = textStats.wordCount;
+    node.recentlyAdded = node.timestamp > recentTimeThreshold;
 
     if (node.parent) {
       node.depth = this.nodeStore[node.parent].depth + 1;
@@ -148,7 +171,14 @@ class LoomTree {
     return this.applyPatches(node);
   }
 
-  updateParentStatsIncremental(node, numNodesAdded = 0, numUnreadChanged = 0) {
+  updateParentStatsIncremental(
+    node,
+    numNodesAdded = 0,
+    numUnreadChanged = 0,
+    numRatedUpChanged = 0,
+    numRatedDownChanged = 0,
+    numRecentChanged = 0
+  ) {
     // when a node is added or edited, recalculate up the tree without needing to redo the full traversal
     if (node.parent) {
       let parentStats = this.nodeStore[node.parent].treeStats;
@@ -191,32 +221,18 @@ class LoomTree {
       let newDepth = nodeMaxDepth + 1;
       parentStats.maxChildDepth = Math.max(parentStats.maxChildDepth, newDepth);
 
-      // For unread counts, we need to handle the change incrementally
-      // For leaf nodes: just add/subtract 1 based on read status
-      // For non-leaf nodes: add/subtract the change in their subtree's unread count
-      if (numUnreadChanged !== 0) {
-        // Read status changed - propagate the change up
-        parentStats.unreadChildNodes = Math.max(
-          0,
-          parentStats.unreadChildNodes + numUnreadChanged
-        );
-      } else if (numNodesAdded !== 0) {
-        // Node is being added or removed - adjust count based on node's read status
-        const wasUnread = !node.read;
-        if (numNodesAdded > 0 && wasUnread) {
-          parentStats.unreadChildNodes += 1;
-        } else if (numNodesAdded < 0 && wasUnread) {
-          parentStats.unreadChildNodes = Math.max(
-            0,
-            parentStats.unreadChildNodes - 1
-          );
-        }
-      }
+      parentStats.unreadChildNodes += numUnreadChanged;
+      parentStats.ratedUpNodes += numRatedUpChanged;
+      parentStats.ratedDownNodes += numRatedDownChanged;
+      parentStats.recentNodes += numRecentChanged;
 
       this.updateParentStatsIncremental(
         this.nodeStore[node.parent],
         numNodesAdded,
-        numUnreadChanged
+        numUnreadChanged,
+        numRatedUpChanged,
+        numRatedDownChanged,
+        numRecentChanged
       );
     }
   }
@@ -224,7 +240,19 @@ class LoomTree {
   updateNodeRating(nodeId, rating) {
     const node = this.nodeStore[nodeId];
     if (node) {
+      const previousRating = node.rating;
       node.rating = rating;
+
+      if (previousRating != node.rating) {
+        this.updateParentStatsIncremental(
+          node,
+          0,
+          0,
+          node.rating == true ? 1 : previousRating == true ? -1 : 0,
+          node.rating == false ? 1 : previousRating == false ? -1 : 0,
+          0
+        );
+      }
     }
   }
 
@@ -281,7 +309,7 @@ class LoomTree {
       }
 
       // Propagate the change upward
-      this.updateParentStatsIncremental(node, 0, unreadChange);
+      this.updateParentStatsIncremental(node, 0, unreadChange, 0, 0, 0);
 
       // Update tree view if available
       if (window.treeNav) {
@@ -343,21 +371,22 @@ class LoomTree {
     this.root = this.nodeStore["1"];
 
     if (this.root) {
-      this.calculateAllNodeStats(this.root);
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      this.calculateAllNodeStats(this.root, fiveMinutesAgo);
     }
   }
 
-  calculateAllNodeStats(node) {
-    this.updateNodeStats(node);
+  calculateAllNodeStats(node, recentTimeThreshold) {
+    this.updateNodeStats(node, recentTimeThreshold);
     for (const childId of node.children) {
       if (this.nodeStore[childId]) {
-        this.calculateAllNodeStats(this.nodeStore[childId]);
+        this.calculateAllNodeStats(
+          this.nodeStore[childId],
+          recentTimeThreshold
+        );
       }
     }
-    this.updateNodeTreeStats(node);
-  }
 
-  updateNodeTreeStats(node) {
     // Calculate tree stats for this node based on its children
     let totalChildNodes = 0;
     let maxChildDepth = 0;
@@ -365,6 +394,9 @@ class LoomTree {
     let maxCharCountOfChildren = node.characterCount; // Start with this node's own count
     let lastChildUpdate = node.timestamp; // Start with this node's own timestamp
     let unreadChildNodes = 0;
+    let ratedUpNodes = 0;
+    let ratedDownNodes = 0;
+    let recentNodes = 0;
 
     for (const childId of node.children) {
       const child = this.nodeStore[childId];
@@ -395,7 +427,24 @@ class LoomTree {
           unreadChildNodes += 1;
         }
         unreadChildNodes += child.treeStats.unreadChildNodes;
+
+        // Count rated nodes in subtree
+        if (child.rating === true) {
+          ratedUpNodes += 1;
+        } else if (child.rating === false) {
+          ratedDownNodes += 1;
+        }
+        ratedUpNodes += child.treeStats.ratedUpNodes;
+        ratedDownNodes += child.treeStats.ratedDownNodes;
+
+        // Count recent nodes in subtree
+        recentNodes += child.treeStats.recentNodes;
       }
+    }
+
+    // Count this node itself if it's recent
+    if (node.recentlyAdded) {
+      recentNodes += 1;
     }
 
     // Update this node's tree stats
@@ -405,6 +454,9 @@ class LoomTree {
     node.treeStats.maxCharCountOfChildren = maxCharCountOfChildren;
     node.treeStats.lastChildUpdate = lastChildUpdate;
     node.treeStats.unreadChildNodes = unreadChildNodes;
+    node.treeStats.ratedUpNodes = ratedUpNodes;
+    node.treeStats.ratedDownNodes = ratedDownNodes;
+    node.treeStats.recentNodes = recentNodes;
   }
 }
 

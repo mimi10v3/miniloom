@@ -560,7 +560,7 @@ ipcMain.handle("new-loom", async event => {
     setCurrentFile(tempFilePath, true);
     mainWindow.webContents.send(
       "update-filename",
-      "Untitled",
+      "Unsaved",
       null,
       tempFilePath,
       true
@@ -654,7 +654,7 @@ ipcMain.handle("renderer-ready", async event => {
         setCurrentFile(tempFilePath, true);
         mainWindow.webContents.send(
           "update-filename",
-          "Untitled",
+          "Unsaved",
           new Date(),
           tempFilePath,
           true
@@ -681,7 +681,7 @@ ipcMain.handle("renderer-ready", async event => {
   setCurrentFile(tempFilePath, true);
   mainWindow.webContents.send(
     "update-filename",
-    "Untitled",
+    "Unsaved",
     null,
     tempFilePath,
     true

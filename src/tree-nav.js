@@ -154,7 +154,7 @@ class TreeNav {
 
     // Special treatment for Root Node
     if (node.id === "1") {
-      link.textContent = "🌳 Start Here";
+      link.textContent = "🌳 Root Node";
       link.classList.add("root-node-link");
       link.title = "Root Node - Start Here";
 
@@ -182,22 +182,34 @@ class TreeNav {
     const textSpan = document.createElement("span");
     textSpan.textContent = displayText;
 
-    // Make new/unread nodes heavy medium weight and italic
-    if (!node.read) {
+    // Make new/unread nodes normal weight and style
+    if (node.read === false) {
       textSpan.classList.add("unread-node");
     }
 
+    // Add elements in new order: status (now includes badge), author (if user), text, ratings
     link.appendChild(statusSpan);
-    link.appendChild(ratingSpan);
-    link.appendChild(textSpan);
 
-    // Add subtree badge if node has children (after text span so it stays visible)
-    if (node.children && node.children.length > 0) {
-      const badgeSpan = this.createSubtreeBadge(node);
-      link.appendChild(badgeSpan);
+    // Add author span for user nodes (already created above)
+    if (node.type === "user") {
+      // authorSpan already added above
     }
 
-    link.title = `${index}. ${displayText}`;
+    link.appendChild(textSpan);
+
+    // Add 🛑 emoji if the node is Complete (finishReason === "stop")
+    if (node.finishReason === "stop") {
+      const completeEmoji = document.createElement("span");
+      completeEmoji.textContent = " 🛑";
+      completeEmoji.title = "Complete - this branch is ended";
+      link.appendChild(completeEmoji);
+    }
+
+    // Add rating last (on the right)
+    link.appendChild(ratingSpan);
+
+    // Create comprehensive hover tooltip
+    link.title = this.createNodeTooltip(node, displayText);
 
     link.onclick = event => {
       event.stopPropagation();
@@ -211,19 +223,26 @@ class TreeNav {
     const statusSpan = document.createElement("span");
     statusSpan.classList.add("node-status");
 
-    // Determine status
+    // Determine status - combine with badge functionality
     if (node.error) {
       statusSpan.classList.add("status-error");
       statusSpan.textContent = "⚠️";
-      statusSpan.title = `Error: ${node.error}`;
     } else if (node.generationPending) {
       statusSpan.classList.add("status-pending");
       statusSpan.textContent = "🎲";
-      statusSpan.title = "Generation in progress...";
-    } else if (!node.read) {
+    } else if (node.read === false) {
       statusSpan.classList.add("status-unread");
-      statusSpan.textContent = "🆕";
-      statusSpan.title = "Unread node";
+      statusSpan.textContent = "🌱";
+    } else if (node.children && node.children.length > 0) {
+      // Show badge with subtree count
+      statusSpan.classList.add("status-badge");
+      const totalSubtreeNodes = node.treeStats.totalChildNodes;
+      statusSpan.textContent = ` ${totalSubtreeNodes}`;
+
+      // Add red class if there are recent nodes
+      if (node.treeStats.recentNodes > 0) {
+        statusSpan.classList.add("status-badge-unread");
+      }
     } else {
       statusSpan.classList.add("status-normal");
       statusSpan.textContent = "";
@@ -239,11 +258,9 @@ class TreeNav {
     if (node.rating === true) {
       ratingSpan.classList.add("rating-star");
       ratingSpan.textContent = "👍";
-      ratingSpan.title = "Thumbs up";
     } else if (node.rating === false) {
       ratingSpan.classList.add("rating-no");
       ratingSpan.textContent = "👎";
-      ratingSpan.title = "Thumbs down";
     } else {
       ratingSpan.classList.add("rating-none");
       ratingSpan.textContent = "";
@@ -252,20 +269,53 @@ class TreeNav {
     return ratingSpan;
   }
 
+  createNodeTooltip(node, displayText) {
+    const lines = [];
+
+    // Node summary
+    lines.push(displayText);
+
+    // Author if available
+    if (node.type === "user") {
+      lines.push("Author: User");
+    }
+
+    // Timestamp
+    if (node.timestamp) {
+      const formattedTime = window.utils.formatTimestamp(node.timestamp);
+      lines.push(`Generated: ${formattedTime}`);
+    }
+
+    // Add subtree stats using the shared utility function
+    if (node.children && node.children.length > 0) {
+      lines.push(""); // Empty line separator
+      lines.push(window.utils.generateSubtreeTooltipText(node));
+    } else {
+      // Just the basic ID info for nodes without children
+      lines.push(`ID: ${node.id || "unknown"}`);
+    }
+
+    return lines.join("\n");
+  }
+
   createSubtreeBadge(node) {
     const badgeSpan = document.createElement("span");
     badgeSpan.classList.add("subtree-badge");
 
-    // Add red class if there are unread child nodes
-    if (node.treeStats.unreadChildNodes > 0) {
+    // Add red class if there are recent nodes
+    if (node.treeStats.recentNodes > 0) {
       badgeSpan.classList.add("subtree-badge-unread");
     }
 
     // Use the pre-calculated totalChildNodes from treeStats
     const totalSubtreeNodes = node.treeStats.totalChildNodes;
 
+    // Get the last change timestamp for the subtree
+    const lastChangeTime = node.treeStats.lastChildUpdate || node.timestamp;
+    const formattedLastChange = window.utils.formatTimestamp(lastChangeTime);
+
     badgeSpan.textContent = ` ${totalSubtreeNodes}`;
-    badgeSpan.title = `${node.children.length} immediate children, ${totalSubtreeNodes} total nodes in subtree${node.treeStats.unreadChildNodes > 0 ? `, ${node.treeStats.unreadChildNodes} unread` : ""}`;
+    badgeSpan.title = `${node.children.length} immediate children, ${totalSubtreeNodes} total nodes in subtree${node.treeStats.unreadChildNodes > 0 ? `, ${node.treeStats.unreadChildNodes} unread` : ""}${node.treeStats.recentNodes > 0 ? `, ${node.treeStats.recentNodes} recent (5min)` : ""}\n🕐 Last change: ${formattedLastChange}`;
 
     return badgeSpan;
   }
@@ -352,9 +402,17 @@ class TreeNav {
       const parentNode = loomTree.nodeStore[parentId];
 
       if (parentNode) {
-        const parentLi = this.createTreeLi(parentNode, 1, false, []);
-        parentLi.classList.add("expanded-parent-node");
-        expandedContainer.appendChild(parentLi);
+        // Create a flat structure without nested ul/li to avoid tree dashes
+        const parentDiv = document.createElement("div");
+        parentDiv.classList.add("expanded-parent-node");
+
+        const nodeSpan = this.createNodeSpan(parentNode, [], false);
+        const link = this.createNodeLink(parentNode, 1);
+
+        nodeSpan.appendChild(link);
+        parentDiv.appendChild(nodeSpan);
+
+        expandedContainer.appendChild(parentDiv);
       }
     }
 

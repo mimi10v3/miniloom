@@ -99,17 +99,37 @@
         flex-direction: row;
         align-items: center;
         gap: 10px;
+        position: relative;
       }
 
-      .tree-stats span {
-        cursor: help;
+      .tree-stats-summary {
+        cursor: pointer;
         padding: 2px 4px;
         border-radius: 3px;
         transition: background-color 0.2s;
+        position: relative;
       }
 
-      .tree-stats span:hover {
+      .tree-stats-summary:hover {
         background-color: var(--bg-secondary);
+      }
+
+      .tooltip {
+        position: fixed;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-primary);
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        white-space: pre-line;
+        z-index: 99999;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        color: var(--text-primary);
+        text-align: left;
+        cursor: text;
+        user-select: text;
+        min-width: 200px;
+        pointer-events: none;
       }
 
       .file-title-row {
@@ -206,11 +226,11 @@
         margin-top: 4px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 2px;
       }
 
       .subtree-info {
-        cursor: help;
+        cursor: pointer;
         position: relative;
       }
 
@@ -231,21 +251,39 @@
         color: var(--text-primary);
         min-width: 120px;
         text-align: left;
+        margin-bottom: 4px;
       }
 
       .node-info-line {
         display: flex;
         align-items: center;
         gap: 0;
-        font-size: 12px;
+        font-size: 14px;
         flex-wrap: wrap;
+        padding: 0px 0;
+      }
+
+      .node-info-line.metadata-line {
+        font-size: 12px;
+        color: var(--text-light);
+        padding: 1px 0;
+      }
+
+      .node-info-line.metadata-line span {
+        padding: 0px 1px;
+        font-size: 12px;
+        margin-right: 6px;
+      }
+
+      .node-info-line.metadata-line span:last-child {
+        margin-right: 0;
       }
 
       .node-info-line span {
-        padding: 0;
+        padding: 1px 2px;
         border-radius: 3px;
         transition: background-color 0.2s;
-        font-size: var(--font-size-base);
+        font-size: 14px;
         line-height: 1.4;
         vertical-align: baseline;
       }
@@ -265,8 +303,8 @@
       /* Thumbs for focused node display */
       .node-stats-display .thumbs {
         font-size: 1.3em;
-        height: 36px;
-        width: 36px;
+        height: 38px;
+        width: 38px;
         border-radius: 8px;
         background-color: #007bff;
         color: white;
@@ -277,6 +315,7 @@
         opacity: 0.7;
         transition: all 0.2s;
         margin-left: 8px;
+        margin-right: 4px;
         cursor: pointer;
       }
 
@@ -587,7 +626,7 @@
 
       .loom-tree-view ul {
         margin-top: 0;
-        padding-left: 0.8em;
+        padding-left: 0.6em;
         margin-left: 0em;
         list-style: none;
         position: relative;
@@ -596,7 +635,7 @@
       }
 
       .loom-tree-view > ul {
-        padding-left: 0.4em;
+        padding-left: 0.2em;
         margin-top: 0;
       }
 
@@ -618,7 +657,7 @@
       .loom-tree-view li:last-child::after {
         content: "";
         position: absolute;
-        left: -0.8em; /* align with ul::before */
+        left: -0.6em; /* align with ul::before */
         top: 0.9em; /* start just below the elbow */
         bottom: 0; /* mask to bottom */
         width: 1px;
@@ -629,12 +668,14 @@
       .loom-tree-view li::before {
         content: "";
         position: absolute;
-        left: -0.8em;
+        left: -0.6em;
         top: 0.8em;
-        width: 0.8em;
+        width: 0.6em;
         height: 1px;
         background: rgba(41, 49, 33, 0.2);
+        z-index: 1;
       }
+
 
       .loom-tree-view li {
         position: relative;
@@ -648,8 +689,8 @@
         width: 100%;
         display: flex;
         align-items: center;
-        gap: 3px;
-        padding: 2px 6px 2px var(--spacing-md);
+        gap: 1px;
+        padding: 2px 4px 2px 8px;
         border-radius: var(--radius-md);
         text-decoration: none;
         color: var(--text-primary);
@@ -671,6 +712,19 @@
         min-width: 0;
       }
 
+      /* Control order of elements: status first (leftmost), then author, then text, then ratings */
+      .loom-tree-view li a .node-status {
+        order: -3; /* Leftmost */
+      }
+
+      .loom-tree-view li a .author-indicator {
+        order: -2; /* Second */
+      }
+
+      .loom-tree-view li a .node-rating {
+        order: 1; /* Last */
+      }
+
       /* Hide empty spans to prevent spacing */
       .loom-tree-view li a .node-status:empty,
       .loom-tree-view li a .node-rating:empty,
@@ -686,25 +740,60 @@
       }
 
       /* Text span - flexible, truncates with ellipsis */
-      .loom-tree-view li a span:not(.node-status):not(.node-rating):not(.author-indicator):not(.subtree-badge) {
+      .loom-tree-view li a span:not(.node-status):not(.node-rating):not(.author-indicator) {
         flex: 1;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        margin-right: 4px; /* Space between text and badge */
+        margin-right: 0; /* No right margin needed with new layout */
+        margin-left: 0; /* No left margin to ensure it's close to badges */
         display: block; /* Ensure proper text truncation */
         max-width: 100%; /* Ensure it doesn't overflow */
+        order: 0; /* Main content in the middle */
+        opacity: 0.9; /* Slightly less than 1.0 opacity for all summaries */
       }
 
-      /* Badge - fixed size, always visible */
-      .loom-tree-view li a .subtree-badge {
+
+      /* Rating - fixed size, positioned to the right */
+      .loom-tree-view li a .node-rating {
         flex-shrink: 0;
         flex-grow: 0;
         width: auto;
         min-width: 12px;
         max-width: none;
         margin-left: auto; /* Push to the right */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1;
+        text-align: center;
+      }
+
+      /* Rating colors - no backgrounds, just colored text */
+      .loom-tree-view li a .node-rating.rating-star {
+        background-color: transparent;
+        border: none;
+        color: #28a745;
+        transform: translate(1px, 5px); /* Moved down 2px more */
+      }
+
+      .loom-tree-view li a .node-rating.rating-no {
+        background-color: transparent;
+        border: none;
+        color: #dc3545;
+        transform: translate(1px, 5px); /* Moved down 2px more */
+      }
+
+      .loom-tree-view li a .node-rating.rating-none {
+        background-color: transparent;
+        border: none;
+        color: transparent;
+        transform: none;
       }
 
       .loom-tree-view li a:hover {
@@ -719,9 +808,19 @@
         transform: none;
       }
 
+      .loom-tree-view .parent-of-focused > a:hover {
+        background: rgba(213, 4, 2, 0.08);
+        color: var(--text-primary);
+        border-left: 3px solid #dc3545;
+      }
+
       .downvoted,
       .downvoted * {
         opacity: 0.85;
+      }
+
+      .upvoted span:not(.node-status):not(.node-rating):not(.author-indicator) {
+        opacity: 1.0; /* Full opacity for thumbs up nodes */
       }
 
       .loom-tree-view #focused-node > a {
@@ -737,14 +836,22 @@
       }
 
       .loom-tree-view li a .unread-node {
-        font-weight: 520;
-        font-style: italic;
+        font-weight: normal;
+        font-style: normal;
       }
 
-      .parent-of-focused > a {
-        background: var(--bg-focus);
+      .loom-tree-view li a .status-unread {
+        opacity: 0.8;
+      }
+
+      .loom-tree-view .parent-of-focused > a {
+        background: rgba(213, 4, 2, 0.03);
         font-weight: var(--font-weight-medium);
-        border-left: 3px solid rgba(213, 4, 2, 0.35);
+        color: var(--text-primary);
+        border-left: 3px solid #dc3545;
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-size: 13px;
       }
 
       /* subtler compressed children link color */
@@ -753,7 +860,7 @@
       }
 
       .subtree-badge {
-        background-color: #007bff;
+        background-color: #4a5568;
         color: white;
         padding: 1px 4px;
         border-radius: 8px;
@@ -776,6 +883,33 @@
         background-color: #dc3545;
       }
 
+      /* Combined status-badge styling */
+      .node-status.status-badge {
+        background-color: #4a5568;
+        color: white;
+        padding: 1px 4px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 500;
+        display: inline-block;
+        min-width: 12px;
+        text-align: center;
+        line-height: 1.2;
+        margin-right: 1px;
+        flex-shrink: 0;
+        flex-grow: 0;
+        width: auto;
+        max-width: none;
+        margin-left: 0;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .node-status.status-badge-unread {
+        background-color: #dc3545;
+      }
+
       .root-node-link {
         font-weight: bold;
         color: #007bff;
@@ -785,7 +919,7 @@
       .author-indicator {
         color: #007bff;
         font-size: 0.9em;
-        margin-right: 2px;
+        margin-right: 1px;
       }
 
 
@@ -796,15 +930,22 @@
       .expanded-parent-node {
         margin: 2px 0;
         padding: 0;
-        border-left: 2px solid rgba(213, 4, 2, 0.2);
         background: rgba(213, 4, 2, 0.03);
         border-radius: 4px;
         transition: all var(--transition-normal);
+        list-style: none; /* Remove list styling */
+        margin-left: 0;
       }
 
       .expanded-parent-node:hover {
         background: rgba(213, 4, 2, 0.06);
-        border-left-color: rgba(213, 4, 2, 0.3);
+      }
+
+      /* Ensure expanded parents container doesn't have list styling */
+      .expanded-parents-container {
+        margin: 6px 0;
+        padding: 6px 6px 6px 0;
+        list-style: none; /* Remove list styling */
       }
 
       .expanded-parent-node a {
@@ -969,6 +1110,7 @@
     </style>
   </head>
   <body>
+    <div id="tree-stats-tooltip" class="tooltip" style="display: none;"></div>
     <div id="main-content" class="main-content">
       <div id="narrative-pane" class="narrative-pane">
         <div id="top-bar" class="top-bar">
@@ -984,22 +1126,16 @@
             <div class="file-info">
               <div class="file-title-row">
                 <span id="current-filename" class="current-filename"
-                  >Untitled</span
-                >
-                <span id="file-author" class="author-info"
-                  ><span>👤</span><span id="author-name">Author</span></span
+                  >Unsaved</span
                 >
               </div>
               <div id="tree-stats" class="tree-stats">
-                <div>
-                  <span title="Total nodes in tree">🍃 <span id="tree-total-nodes">0</span></span>
-                  <span title="Maximum depth">📏 <span id="tree-max-depth">0</span></span>
-                  <span title="Largest node by word count">📝 <span id="tree-max-words">0</span></span>
-                  <span title="Largest node by character count">🔤 <span id="tree-max-chars">0</span></span>
-                </div>
-                <div>
-                  <span title="Last node created">🕐 <span id="tree-last-update">N/A</span></span>
-                </div>
+                <span id="file-author" class="author-info"
+                  ><span>👤</span><span id="author-name">Author</span></span
+                >
+                <span id="tree-stats-summary" class="tree-stats-summary">
+                  🍃 <span id="tree-total-nodes">0</span> nodes
+                </span>
               </div>
             </div>
           </div>
@@ -1029,28 +1165,31 @@
         </div>
 
         <div id="controls" class="controls">
-                  <div id="controls-left" class="controls-left">
-          <div id="node-stats-display" class="node-stats-display">
-            <div class="node-info-line">
-              <span title="Node ID" id="node-position">📍 1: </span>
-              <span title="Node summary" id="node-summary">Untitled</span>
+          <div id="controls-left" class="controls-left">
+            <div id="thumbs-display" class="thumbs-display">
+              <span id="thumb-up" class="thumbs">👍</span>
+              <span id="thumb-down" class="thumbs">👎</span>
             </div>
-            <div class="node-info-line">
-              <span title="Author"><span id="node-author-emoji">👤</span> <span id="node-author">Unknown</span></span>
-            </div>
-            <div class="node-info-line">
-              <span id="node-metadata">🕐 N/A | 📏 0</span>
-              <span id="finish-reason" class="finish-reason" style="display: none;"></span>
-              <span id="subtree-info" class="subtree-info" style="display: none;">
-                🍃 <span id="subtree-children">0</span>/<span id="subtree-total">0</span>
-              </span>
+            <div id="node-stats-display" class="node-stats-display">
+              <div class="node-info-line">
+                <span title="Node ID" id="node-position">📍 1: </span>
+                <span title="Node summary" id="node-summary">Untitled</span>
+              </div>
+              <div class="node-info-line metadata-line">
+                <span title="Author"><span id="node-author-emoji">👤</span><span id="node-author">Unknown</span></span>
+              </div>
+              <div class="node-info-line metadata-line">
+                <span title="Last updated time" id="node-timestamp">🕐 N/A</span>
+              </div>
+              <div class="node-info-line metadata-line">
+                <span title="Depth in the tree" id="node-metadata">📏 0</span>
+                <span id="finish-reason" class="finish-reason" style="display: none;"></span>
+                <span id="subtree-info" class="subtree-info" style="display: none;">
+                  🍃 <span id="subtree-children"><span id="subtree-total">0</span></span>
+                </span>
+              </div>
             </div>
           </div>
-          <div id="thumbs-display" class="thumbs-display">
-            <span id="thumb-up" class="thumbs">👍</span>
-            <span id="thumb-down" class="thumbs">👎</span>
-          </div>
-        </div>
 
           <div id="controls-right" class="controls-right">
             <div id="generation-controls">

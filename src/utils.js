@@ -194,6 +194,34 @@ function getNetChangeClass(change) {
   return "";
 }
 
+/**
+ * Generate subtree tooltip text with comprehensive statistics
+ * @param {Object} node - The node object with treeStats
+ * @returns {string} - Formatted subtree statistics text
+ */
+function generateSubtreeTooltipText(node) {
+  if (!node.children || node.children.length === 0) {
+    return `ID: ${node.id || "unknown"}`;
+  }
+
+  const subtreeDate = formatTimestamp(
+    node.treeStats.lastChildUpdate || node.timestamp
+  );
+
+  return (
+    `🍃 Total nodes: ${node.treeStats.totalChildNodes}\n` +
+    `👶 Direct children: ${node.children.length}\n` +
+    `📏 Max depth: ${node.treeStats.maxChildDepth}\n` +
+    `🕐 Last: ${subtreeDate}\n` +
+    `📝 Max words: ${node.treeStats.maxWordCountOfChildren}\n` +
+    `🔤 Max chars: ${node.treeStats.maxCharCountOfChildren}\n` +
+    `🌱 Unread nodes: ${node.treeStats.unreadChildNodes || 0}\n` +
+    `👍 Rated Good: ${node.treeStats.ratedUpNodes || 0}\n` +
+    `👎 Rated Bad: ${node.treeStats.ratedDownNodes || 0}\n` +
+    `🔥 Recent nodes (5min): ${node.treeStats.recentNodes || 0}`
+  );
+}
+
 if (typeof window !== "undefined") {
   window.utils = {
     validateFieldStringType,
@@ -209,5 +237,6 @@ if (typeof window !== "undefined") {
     calculateNetChanges,
     formatNetChange,
     getNetChangeClass,
+    generateSubtreeTooltipText,
   };
 }
