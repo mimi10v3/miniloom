@@ -222,6 +222,35 @@ function generateSubtreeTooltipText(node) {
   );
 }
 
+/**
+ * Helper function to convert finish reason codes to user-friendly text
+ */
+function getFinishReasonDisplayText(finishReason) {
+  const reasonMap = {
+    stop: "Complete",
+    length: "Max Length",
+    content_filter: "Content Filtered",
+    tool_calls: "Tool Called",
+    function_call: "Function Called",
+    max_tokens: "Token Limit",
+    timeout: "Timed Out",
+    user: "User Stopped",
+    assistant: "Assistant Stopped",
+    system: "System Stopped",
+    end_turn: "Turn Ended",
+    max_content_length: "Content Limit",
+    safety: "Safety Filter",
+    recitation: "Recitation Detected",
+    network_error: "Network Error",
+    server_error: "Server Error",
+    rate_limit: "Rate Limited",
+    invalid_request: "Invalid Request",
+    unknown: "Unknown",
+  };
+
+  return reasonMap[finishReason] || finishReason || "Unknown";
+}
+
 if (typeof window !== "undefined") {
   window.utils = {
     validateFieldStringType,
@@ -238,5 +267,6 @@ if (typeof window !== "undefined") {
     formatNetChange,
     getNetChangeClass,
     generateSubtreeTooltipText,
+    getFinishReasonDisplayText,
   };
 }

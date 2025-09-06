@@ -32,6 +32,7 @@ const appState = new AppState();
 let llmService;
 let treeNav;
 let searchManager;
+let fileManager;
 
 const DOM = {
   editor: document.getElementById("editor"),
@@ -47,7 +48,6 @@ const DOM = {
   nodeMetadata: document.getElementById("node-metadata"),
   finishReason: document.getElementById("finish-reason"),
   subtreeInfo: document.getElementById("subtree-info"),
-  subtreeChildren: document.getElementById("subtree-children"),
   subtreeTotal: document.getElementById("subtree-total"),
   errorMsgEl: document.getElementById("error-message"),
   errorsEl: document.getElementById("errors"),
@@ -62,11 +62,9 @@ const DOM = {
   die: document.getElementById("die"),
   filenameElement: document.getElementById("current-filename"),
   loomTreeView: document.getElementById("loom-tree-view"),
-  // Tree stats elements
   treeTotalNodes: document.getElementById("tree-total-nodes"),
   treeStatsSummary: document.getElementById("tree-stats-summary"),
   treeStatsTooltip: document.getElementById("tree-stats-tooltip"),
-  // Editor stats elements
   editorWordCount: document.getElementById("editor-word-count"),
   editorWordChange: document.getElementById("editor-word-change"),
   editorCharCount: document.getElementById("editor-char-count"),
@@ -91,7 +89,7 @@ function updateFocus(nodeId, reason = "unknown") {
 
   // Auto-save when focus changes due to content creation
   if (reason === "editor-auto-save") {
-    autoSave();
+    fileManager.autoSave();
   }
 }
 
@@ -111,35 +109,6 @@ function updateUI() {
   if (treeNav) {
     treeNav.updateTreeView();
   }
-}
-
-/**
- * Helper function to convert finish reason codes to user-friendly text
- */
-function getFinishReasonDisplayText(finishReason) {
-  const reasonMap = {
-    stop: "Complete",
-    length: "Max Length",
-    content_filter: "Content Filtered",
-    tool_calls: "Tool Called",
-    function_call: "Function Called",
-    max_tokens: "Token Limit",
-    timeout: "Timed Out",
-    user: "User Stopped",
-    assistant: "Assistant Stopped",
-    system: "System Stopped",
-    end_turn: "Turn Ended",
-    max_content_length: "Content Limit",
-    safety: "Safety Filter",
-    recitation: "Recitation Detected",
-    network_error: "Network Error",
-    server_error: "Server Error",
-    rate_limit: "Rate Limited",
-    invalid_request: "Invalid Request",
-    unknown: "Unknown",
-  };
-
-  return reasonMap[finishReason] || finishReason || "Unknown";
 }
 
 /**
@@ -216,7 +185,7 @@ function updateFocusedNodeStats() {
       focusedNode.type === "gen" &&
       focusedNode.finishReason !== "length"
     ) {
-      const finishReasonText = getFinishReasonDisplayText(
+      const finishReasonText = window.utils.getFinishReasonDisplayText(
         focusedNode.finishReason
       );
       DOM.finishReason.textContent = ` | 🛑 ${finishReasonText}`;
@@ -227,9 +196,8 @@ function updateFocusedNodeStats() {
   }
 
   // Update subtree info
-  if (DOM.subtreeInfo && DOM.subtreeChildren && DOM.subtreeTotal) {
+  if (DOM.subtreeInfo && DOM.subtreeTotal) {
     if (focusedNode.children && focusedNode.children.length > 0) {
-      DOM.subtreeChildren.textContent = focusedNode.children.length;
       DOM.subtreeTotal.textContent = focusedNode.treeStats.totalChildNodes;
       DOM.subtreeInfo.style.display = "inline";
 
@@ -403,142 +371,6 @@ function setupEditorHandlers() {
 }
 
 /**
- * File Operations
- */
-async function saveFile() {
-  const data = {
-    loomTree: appState.loomTree.serialize(),
-    focus: appState.focusedNode,
-  };
-  try {
-    await window.electronAPI.saveFile(data);
-  } catch (err) {
-    console.error("Save File Error:", err);
-  }
-}
-
-async function loadFile() {
-  try {
-    const data = await window.electronAPI.loadFile();
-    if (data) {
-      await loadFileData(data);
-    }
-    // If data is null, user cancelled the operation
-  } catch (err) {
-    console.error("Load File Error:", err);
-  }
-}
-
-async function loadRecentFile(filePath) {
-  try {
-    const data = await window.electronAPI.loadRecentFile(filePath);
-    if (data) {
-      await loadFileData(data);
-    }
-  } catch (err) {
-    console.error("Load Recent File Error:", err);
-  }
-}
-
-async function loadFileData(data) {
-  try {
-    const newLoomTree = new LoomTree();
-    newLoomTree.loadFromData(data.loomTree);
-
-    // Update global state
-    appState.loomTree = newLoomTree;
-
-    // Set focus to saved focus or root
-    const savedFocus =
-      data.focus && data.focus.id
-        ? newLoomTree.nodeStore[data.focus.id]
-        : newLoomTree.root;
-
-    if (!savedFocus) {
-      console.warn("Saved focus node not found, using root");
-      appState.focusedNode = newLoomTree.root;
-    } else {
-      appState.focusedNode = savedFocus;
-    }
-
-    // Ensure the focused node is properly rendered
-    if (appState.focusedNode) {
-      appState.focusedNode.cachedRenderText = newLoomTree.renderNode(
-        appState.focusedNode
-      );
-    }
-
-    // Update existing services with new data
-    if (searchManager) {
-      searchManager.updateLoomTree(newLoomTree);
-      searchManager.rebuildIndex();
-    }
-    if (treeNav) {
-      treeNav.renderTree(newLoomTree.root, DOM.loomTreeView);
-    }
-
-    // Render the new state
-    updateUI();
-
-    // Trigger an auto-save to create the temp file
-    await autoSave();
-  } catch (error) {
-    console.error("Error in loadFileData:", error);
-    throw error;
-  }
-}
-
-async function autoSave() {
-  if (!appState.focusedNode) {
-    console.warn("Cannot auto-save: no focused node");
-    return;
-  }
-
-  const data = {
-    loomTree: appState.loomTree.serialize(),
-    focus: appState.focusedNode,
-    samplerSettingsStore: appState.samplerSettingsStore,
-  };
-
-  try {
-    await window.electronAPI.autoSave(data);
-  } catch (err) {
-    console.error("Auto-save Error:", err);
-  }
-}
-
-// Auto-save timer
-async function autoSaveTick() {
-  appState.secondsSinceLastSave += 1;
-  if (appState.secondsSinceLastSave >= 30) {
-    autoSave();
-    appState.secondsSinceLastSave = 0;
-  }
-}
-
-var autoSaveIntervalId = setInterval(autoSaveTick, 1000);
-
-// Tree stats recalculation timer - recalculate every minute to update recent nodes
-function treeStatsRecalcTick() {
-  // Trigger full recalculation of tree stats to update recent nodes count
-  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-  appState.loomTree.calculateAllNodeStats(
-    appState.loomTree.root,
-    fiveMinutesAgo
-  );
-
-  // Update the UI to reflect the new stats
-  updateTreeStatsDisplay();
-
-  // Re-render the tree navigation to show updated badges
-  if (treeNav) {
-    treeNav.updateTreeView();
-  }
-}
-
-var treeStatsRecalcIntervalId = setInterval(treeStatsRecalcTick, 60000); // Every minute
-
-/**
  * Settings Management
  */
 async function loadSettings() {
@@ -595,56 +427,25 @@ window.electronAPI.onUpdateFilename(
   }
 );
 
-window.electronAPI.onInvokeAction((event, action, ...args) => {
-  switch (action) {
-    case "save-file":
-      saveFile();
-      break;
-    case "load-file":
-      loadFile();
-      break;
-    case "new-loom":
-      window.electronAPI.newLoom();
-      break;
-    case "load-recent-file":
-      if (args.length > 0) {
-        loadRecentFile(args[0]);
-      }
-      break;
-    default:
-      console.warn("Action not recognized:", action);
-  }
-});
+// Tree stats recalculation timer - recalculate every minute to update recent nodes
+function treeStatsRecalcTick() {
+  // Trigger full recalculation of tree stats to update recent nodes count
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  appState.loomTree.calculateAllNodeStats(
+    appState.loomTree.root,
+    fiveMinutesAgo
+  );
 
-/**
- * Initialize a fresh loom state - shared logic for new loom creation
- * This function handles the core initialization that happens both on app startup
- * (when no temp file exists) and when user creates a new loom
- */
-function initializeFreshLoom() {
-  // Create fresh loom tree
-  appState.loomTree = new LoomTree();
-  appState.focusedNode = appState.loomTree.root;
+  // Update the UI to reflect the new stats
+  updateTreeStatsDisplay();
 
-  // Reset editor to empty state
-  DOM.editor.value = "";
-  DOM.editor.readOnly = false;
-
-  // Update existing services with fresh data
-  if (searchManager) {
-    searchManager.updateLoomTree(appState.loomTree);
-    searchManager.rebuildIndex();
-  }
+  // Re-render the tree navigation to show updated badges
   if (treeNav) {
-    treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
+    treeNav.updateTreeView();
   }
-
-  // Update all UI components
-  updateUI();
-
-  // Trigger auto-save to create temp file
-  autoSave();
 }
+
+var treeStatsRecalcIntervalId = setInterval(treeStatsRecalcTick, 60000); // Every minute
 
 /**
  * Helper function for summary updates
@@ -685,60 +486,113 @@ async function init() {
   try {
     await loadSettings();
 
-    // Notify main process that renderer is ready and get any initial data (used to restore temp file after error)
-    const initialData = await window.electronAPI.rendererReady();
-    if (initialData) {
-      await loadFileData(initialData);
-    } else {
-      // No temp file exists, create basic fresh state
-      appState.loomTree = new LoomTree();
-      appState.focusedNode = appState.loomTree.root;
-      DOM.editor.value = "";
-      DOM.editor.readOnly = false;
-    }
+    // Initialize file manager first
+    fileManager = new FileManager({
+      appState: appState,
+      updateUI: updateUI,
+      updateSearchIndex: updateSearchIndex,
+      updateSearchIndexForNode: updateSearchIndexForNode,
+      treeNav: null, // Will be set after treeNav is created
+      searchManager: null, // Will be set after searchManager is created
+      DOM: DOM,
+    });
+
+    // Initialize file manager and load initial data
+    await fileManager.init();
 
     // Initialize services (needed for both loaded files and fresh state)
+
     llmService = new LLMService({
-      autoSaveTick: autoSaveTick,
-      updateFocusSummary: updateFocusSummary,
-      setFocus: newFocus => {
-        updateFocus(newFocus.id, "llm-generation");
+      // Settings provider - handles configuration access
+      settingsProvider: {
+        getSamplerSettings: () => ({
+          selectedServiceName: DOM.serviceSelector?.value || "",
+          selectedSamplerName: DOM.samplerSelector?.value || "",
+          selectedApiKeyName: DOM.apiKeySelector?.value || "",
+        }),
+        getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
       },
-      updateNodeMetadata: (nodeId, metadata) => {
-        if (appState.loomTree.nodeStore[nodeId]) {
-          Object.assign(appState.loomTree.nodeStore[nodeId], metadata);
-        }
+
+      // Data provider - handles data access without DOM coupling
+      dataProvider: {
+        getCurrentPrompt: () => DOM.editor.value,
+        getLoomTree: () => appState.getLoomTree(),
+        getCurrentFocus: () => appState.getFocusedNode(),
       },
-      updateTreeView: () => {
-        if (treeNav) {
-          treeNav.updateTreeView();
-        }
-        updateTreeStatsDisplay();
-      },
-      getFocus: () => appState.getFocusedNode(),
-      getLoomTree: () => appState.getLoomTree(),
-      getSamplerSettingsStore: () => appState.getSamplerSettingsStore(),
-      getEditor: () => DOM.editor,
-      getSamplerSettings: () => ({
-        selectedServiceName: DOM.serviceSelector?.value || "",
-        selectedSamplerName: DOM.samplerSelector?.value || "",
-        selectedApiKeyName: DOM.apiKeySelector?.value || "",
-      }),
-      setLoading: function (isLoading) {
-        DOM.editor.readOnly = isLoading;
-        if (DOM.die) {
-          DOM.die.classList.toggle("rolling", isLoading);
-        }
-      },
-      showError: message => {
-        console.warn("Global error:", message);
-        // Trigger UI update to show the error
-        updateErrorDisplay();
-      },
-      updateSearchIndex: (node, fullText) => {
-        if (searchManager) {
-          searchManager.addNodeToSearchIndex(node, fullText);
-        }
+
+      // Event handlers - clean callbacks named from LLM perspective
+      eventHandlers: {
+        onGenerationStarted: nodeId => {
+          // Set loading state when generation starts
+          DOM.editor.readOnly = true;
+          if (DOM.die) {
+            DOM.die.classList.add("rolling");
+          }
+
+          // Set node generation pending and clear any errors
+          const loomTree = appState.getLoomTree();
+          loomTree.setNodeGenerationPending(nodeId, true);
+          loomTree.clearNodeError(nodeId);
+        },
+
+        onGenerationFinished: nodeId => {
+          // Clear loading state when generation finishes
+          DOM.editor.readOnly = false;
+          if (DOM.die) {
+            DOM.die.classList.remove("rolling");
+          }
+
+          // Clear node generation pending state
+          const loomTree = appState.getLoomTree();
+          loomTree.setNodeGenerationPending(nodeId, false);
+        },
+
+        onGenerationFailed: (nodeId, errorMessage) => {
+          console.warn("LLM generation failed:", errorMessage);
+
+          // Set error on the node
+          const loomTree = appState.getLoomTree();
+          loomTree.setNodeError(nodeId, errorMessage);
+
+          // Trigger UI update to show the error
+          updateErrorDisplay();
+        },
+
+        onPreGeneration: async nodeId => {
+          // Auto-save and update summary before generation
+          await fileManager.autoSaveTick();
+          await updateFocusSummary();
+        },
+
+        onNodeCreated: (nodeId, nodeData) => {
+          // Update node metadata
+          if (appState.loomTree.nodeStore[nodeId]) {
+            Object.assign(
+              appState.loomTree.nodeStore[nodeId],
+              nodeData.metadata
+            );
+          }
+
+          // Update search index
+          if (searchManager) {
+            searchManager.addNodeToSearchIndex(
+              nodeData.node,
+              nodeData.fullText
+            );
+          }
+        },
+
+        onTreeViewUpdate: () => {
+          // Update tree view to show new badges
+          if (treeNav) {
+            treeNav.updateTreeView();
+          }
+          updateTreeStatsDisplay();
+        },
+
+        onFocusChanged: (nodeId, reason) => {
+          updateFocus(nodeId, reason);
+        },
       },
     });
 
@@ -769,46 +623,26 @@ async function init() {
       treeNav: treeNav,
     });
 
+    // Update fileManager with references to other services
+    fileManager.treeNav = treeNav;
+    fileManager.searchManager = searchManager;
+
     // Make services globally available
     window.llmService = llmService;
     window.treeNav = treeNav;
     window.searchManager = searchManager;
+    window.fileManager = fileManager;
 
     // Initialize tree view
     treeNav.renderTree(appState.loomTree.root, DOM.loomTreeView);
 
+    // Start file manager timers and set up event handlers
+    fileManager.startAutoSaveTimer();
+    fileManager.setupEventHandlers();
+
     // Set up event listeners
     window.electronAPI.onSettingsUpdated(onSettingsUpdated);
     setupEditorHandlers();
-
-    window.electronAPI.onLoadInitialData(async (event, initialData) => {
-      try {
-        if (initialData && initialData.data) {
-          await loadFileData(initialData.data);
-        }
-      } catch (error) {
-        console.error("Error loading initial data:", error);
-        console.error("Error stack:", error.stack);
-      }
-    });
-
-    window.electronAPI.onResetToNewLoom(async event => {
-      try {
-        initializeFreshLoom();
-      } catch (error) {
-        console.error("Error resetting to new loom:", error);
-        console.error("Error stack:", error.stack);
-      }
-    });
-
-    // Set up final save request handler
-    window.electronAPI.onRequestFinalSave(async event => {
-      try {
-        await autoSave();
-      } catch (error) {
-        console.error("Error in final save:", error);
-      }
-    });
 
     // Populate settings selectors
     populateServiceSelector();

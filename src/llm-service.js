@@ -259,14 +259,17 @@ class APIClient {
 
 // Main LLM Service class
 class LLMService {
-  constructor(callbacks = {}) {
-    this.callbacks = callbacks;
+  constructor(dependencies = {}) {
+    this.settingsProvider = dependencies.settingsProvider;
+    this.dataProvider = dependencies.dataProvider;
+    this.eventHandlers = dependencies.eventHandlers || {};
   }
 
   // Configuration and parameter management
   prepareGenerationParams() {
-    const settings = this.callbacks.getSamplerSettings();
-    const samplerSettingsStore = this.callbacks.getSamplerSettingsStore();
+    const settings = this.settingsProvider.getSamplerSettings();
+    const samplerSettingsStore =
+      this.settingsProvider.getSamplerSettingsStore();
 
     if (!samplerSettingsStore) {
       throw new Error("Sampler settings store not available");
@@ -309,7 +312,7 @@ class LLMService {
     }
   ) {
     if (focusId) {
-      const loomTree = this.callbacks.getLoomTree();
+      const loomTree = this.dataProvider.getLoomTree();
       loomTree.renderNode(loomTree.nodeStore[focusId]);
     }
 
@@ -416,7 +419,7 @@ class LLMService {
   async generateWithProvider(nodeId, providerType) {
     await this.executeGeneration(nodeId, async () => {
       const params = this.prepareGenerationParams();
-      const prompt = this.callbacks.getEditor().value;
+      const prompt = this.dataProvider.getCurrentPrompt();
 
       const providerParams = {
         apiKey: params.apiKey,
@@ -444,7 +447,7 @@ class LLMService {
   async generateWithOpenAIChat(nodeId) {
     await this.executeGeneration(nodeId, async () => {
       const params = this.prepareGenerationParams();
-      const loomTree = this.callbacks.getLoomTree();
+      const loomTree = this.dataProvider.getLoomTree();
       const rollFocus = loomTree.nodeStore[nodeId];
       const promptText = loomTree.renderNode(rollFocus);
 
@@ -470,18 +473,15 @@ class LLMService {
 
   // Common generation execution pattern
   async executeGeneration(nodeId, generationFunction) {
-    if (this.callbacks.setLoading) this.callbacks.setLoading(true);
-
-    const loomTree = this.callbacks.getLoomTree();
-    loomTree.setNodeGenerationPending(nodeId, true);
-    loomTree.clearNodeError(nodeId);
+    if (this.eventHandlers.onGenerationStarted) {
+      this.eventHandlers.onGenerationStarted(nodeId);
+    }
 
     try {
-      if (this.callbacks.autoSaveTick) await this.callbacks.autoSaveTick();
-      if (this.callbacks.updateFocusSummary)
-        await this.callbacks.updateFocusSummary();
-
-      const rollFocus = loomTree.nodeStore[nodeId];
+      if (this.eventHandlers.onPreGeneration) {
+        await this.eventHandlers.onPreGeneration(nodeId);
+      }
+      const rollFocus = this.dataProvider.getLoomTree().nodeStore[nodeId];
       const lastChildIndex = this.getLastChildIndex(rollFocus);
 
       const newResponses = await generationFunction();
@@ -494,23 +494,25 @@ class LLMService {
           this.prepareGenerationParams().apiDelay
         );
       }
-    } catch (error) {
-      const loomTree = this.callbacks.getLoomTree();
-      loomTree.setNodeError(nodeId, error.message);
 
-      if (this.callbacks.showError) this.callbacks.showError(error.message);
+      if (this.eventHandlers.onGenerationCompleted) {
+        this.eventHandlers.onGenerationCompleted(nodeId, newResponses);
+      }
+    } catch (error) {
+      if (this.eventHandlers.onGenerationFailed) {
+        this.eventHandlers.onGenerationFailed(nodeId, error.message);
+      }
       throw error;
     } finally {
-      const loomTree = this.callbacks.getLoomTree();
-      loomTree.setNodeGenerationPending(nodeId, false);
-
-      if (this.callbacks.setLoading) this.callbacks.setLoading(false);
+      if (this.eventHandlers.onGenerationFinished) {
+        this.eventHandlers.onGenerationFinished(nodeId);
+      }
     }
   }
 
   // Response processing
   async processResponses(newResponses, rollFocus, lastChildIndex, apiDelay) {
-    const loomTree = this.callbacks.getLoomTree();
+    const loomTree = this.dataProvider.getLoomTree();
 
     if (!Array.isArray(newResponses) || newResponses.length === 0) {
       console.warn(
@@ -552,23 +554,22 @@ class LLMService {
         responseSummary
       );
 
-      this.callbacks.updateNodeMetadata(responseNode.id, {
-        model: response.model,
-        finishReason: response.finish_reason,
-      });
-
-      // Update search index
-      if (this.callbacks.updateSearchIndex) {
-        this.callbacks.updateSearchIndex(
-          responseNode,
-          loomTree.renderNode(responseNode)
-        );
+      // Notify that a new node was created
+      if (this.eventHandlers.onNodeCreated) {
+        this.eventHandlers.onNodeCreated(responseNode.id, {
+          node: responseNode,
+          metadata: {
+            model: response.model,
+            finishReason: response.finish_reason,
+          },
+          fullText: loomTree.renderNode(responseNode),
+        });
       }
     }
 
-    // Update tree view to show new badges
-    if (this.callbacks.updateTreeView) {
-      this.callbacks.updateTreeView();
+    // Notify that tree view should be updated
+    if (this.eventHandlers.onTreeViewUpdate) {
+      this.eventHandlers.onTreeViewUpdate();
     }
 
     this.updateFocus(rollFocus, lastChildIndex);
@@ -580,7 +581,7 @@ class LLMService {
     rollFocus,
     lastChildIndex
   ) {
-    const loomTree = this.callbacks.getLoomTree();
+    const loomTree = this.dataProvider.getLoomTree();
 
     loomTree.clearNodeError(rollFocus.id);
 
@@ -617,24 +618,24 @@ class LLMService {
         newChatText,
         summary
       );
-      this.callbacks.updateNodeMetadata(responseNode.id, {
-        model: responseData.model,
-        usage: responseData.usage,
-        finishReason: choice.finish_reason,
-      });
 
-      // Update search index
-      if (this.callbacks.updateSearchIndex) {
-        this.callbacks.updateSearchIndex(
-          responseNode,
-          loomTree.renderNode(responseNode)
-        );
+      // Notify that a new node was created
+      if (this.eventHandlers.onNodeCreated) {
+        this.eventHandlers.onNodeCreated(responseNode.id, {
+          node: responseNode,
+          metadata: {
+            model: responseData.model,
+            usage: responseData.usage,
+            finishReason: choice.finish_reason,
+          },
+          fullText: loomTree.renderNode(responseNode),
+        });
       }
     }
 
-    // Update tree view to show new badges
-    if (this.callbacks.updateTreeView) {
-      this.callbacks.updateTreeView();
+    // Notify that tree view should be updated
+    if (this.eventHandlers.onTreeViewUpdate) {
+      this.eventHandlers.onTreeViewUpdate();
     }
 
     this.updateFocus(rollFocus, lastChildIndex);
@@ -679,16 +680,23 @@ class LLMService {
   }
 
   updateFocus(rollFocus, lastChildIndex) {
-    const currentFocus = this.callbacks.getFocus();
-    const loomTree = this.callbacks.getLoomTree();
+    const currentFocus = this.dataProvider.getCurrentFocus();
+    const loomTree = this.dataProvider.getLoomTree();
 
-    if (currentFocus === rollFocus && this.callbacks.setFocus && loomTree) {
+    if (
+      currentFocus === rollFocus &&
+      this.eventHandlers.onFocusChanged &&
+      loomTree
+    ) {
+      let targetNodeId;
       if (lastChildIndex === null) {
-        this.callbacks.setFocus(loomTree.nodeStore[rollFocus.children[0]]);
+        targetNodeId = rollFocus.children[0];
       } else {
-        this.callbacks.setFocus(
-          loomTree.nodeStore[rollFocus.children[lastChildIndex + 1]]
-        );
+        targetNodeId = rollFocus.children[lastChildIndex + 1];
+      }
+
+      if (targetNodeId) {
+        this.eventHandlers.onFocusChanged(targetNodeId, "llm-generation");
       }
     }
   }
