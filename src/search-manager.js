@@ -277,6 +277,14 @@ class SearchManager {
         e.target.value = "";
         this.searchClearButton.style.display = "none";
         this.clearSearchState();
+      } else if (e.key === "Enter") {
+        // Re-run search on Enter, even if text hasn't changed
+        const query = e.target.value.trim();
+        if (query) {
+          this.currentSearchQuery = query;
+          this.searchResultsMode = true;
+          this.renderSearchResults(query);
+        }
       }
     });
 
