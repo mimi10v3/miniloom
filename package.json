@@ -7,10 +7,12 @@
   "homepage": "https://github.com/JD-P/miniloom",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "npm run format:check && electron-builder",
+    "build:win": "npm run format:check && electron-builder --win",
+    "build:mac": "npm run format:check && electron-builder --mac",
+    "build:linux": "npm run format:check && electron-builder --linux",
     "dist": "npm run build",
     "pack": "electron-builder --dir"
   },

@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="main.css" />
   </head>
   <body>
-    <div id="tree-stats-tooltip" class="tooltip" style="display: none;"></div>
+    <div id="tree-stats-tooltip" class="tooltip" style="display: none"></div>
     <div id="main-content" class="main-content">
       <div id="narrative-pane" class="narrative-pane">
         <div id="top-bar" class="top-bar">
@@ -50,10 +50,21 @@
           ></textarea>
           <div id="editor-footer" class="editor-footer">
             <div id="editor-stats" class="editor-stats">
-              <span title="Word count"><span id="editor-word-count">0</span><span title="Net word change" id="editor-word-change">(+0)</span> words</span>
-              <span title="Character count"><span id="editor-char-count">0</span><span title="Net character change" id="editor-char-change">(+0)</span> chars</span>
+              <span title="Word count"
+                ><span id="editor-word-count">0</span
+                ><span title="Net word change" id="editor-word-change"
+                  >(+0)</span
+                >
+                words</span
+              >
+              <span title="Character count"
+                ><span id="editor-char-count">0</span
+                ><span title="Net character change" id="editor-char-change"
+                  >(+0)</span
+                >
+                chars</span
+              >
             </div>
-
           </div>
         </div>
 
@@ -78,15 +89,28 @@
                 <span title="Node summary" id="node-summary">Untitled</span>
               </div>
               <div class="node-info-line metadata-line">
-                <span title="Author"><span id="node-author-emoji">👤</span><span id="node-author">Unknown</span></span>
+                <span title="Author"
+                  ><span id="node-author-emoji">👤</span
+                  ><span id="node-author">Unknown</span></span
+                >
               </div>
               <div class="node-info-line metadata-line">
-                <span title="Last updated time" id="node-timestamp">🕐 N/A</span>
+                <span title="Last updated time" id="node-timestamp"
+                  >🕐 N/A</span
+                >
               </div>
               <div class="node-info-line metadata-line">
                 <span title="Depth in the tree" id="node-metadata">📏 0</span>
-                <span id="finish-reason" class="finish-reason" style="display: none;"></span>
-                <span id="subtree-info" class="subtree-info" style="display: none;">
+                <span
+                  id="finish-reason"
+                  class="finish-reason"
+                  style="display: none"
+                ></span>
+                <span
+                  id="subtree-info"
+                  class="subtree-info"
+                  style="display: none"
+                >
                   🍃 <span id="subtree-total">0</span>
                 </span>
               </div>
@@ -135,38 +159,33 @@
       </div>
     </div>
     <div id="nav-pane" class="nav-pane">
-        <div id="search-container" class="search-container">
-          <div class="search-input-wrapper">
-            <input
-              type="text"
-              id="search-input"
-              class="search-input"
-              placeholder="Search nodes..."
-            />
-            <button
-              id="search-clear"
-              class="search-clear"
-              style="display: none"
-            >
-              ×
-            </button>
-          </div>
+      <div id="search-container" class="search-container">
+        <div class="search-input-wrapper">
+          <input
+            type="text"
+            id="search-input"
+            class="search-input"
+            placeholder="Search nodes..."
+          />
+          <button id="search-clear" class="search-clear" style="display: none">
+            ×
+          </button>
         </div>
-        <div id="loom-tree-view" class="loom-tree-view"></div>
-        <!-- Search result containers - hidden by default -->
-        <div
-          id="search-no-results"
-          class="search-no-results"
-          style="display: none"
-        >
-          No results found
-        </div>
-        <div
-          id="search-results-container"
-          class="search-results-container"
-          style="display: none"
-        ></div>
       </div>
+      <div id="loom-tree-view" class="loom-tree-view"></div>
+      <!-- Search result containers - hidden by default -->
+      <div
+        id="search-no-results"
+        class="search-no-results"
+        style="display: none"
+      >
+        No results found
+      </div>
+      <div
+        id="search-results-container"
+        class="search-results-container"
+        style="display: none"
+      ></div>
     </div>
     <script src="utils.js"></script>
     <script src="model.js"></script>

@@ -9,7 +9,7 @@
   --oxford-blue: #142b4fff;
   --night: #0d0e10ff;
   --engineering-orange: #d50402ff;
-  
+
   /* Extended Color Palette */
   --primary: var(--engineering-orange);
   --primary-hover: var(--barn-red);
@@ -19,17 +19,17 @@
   --text-secondary: #666;
   --text-muted: #999;
   --text-light: #777;
-  
+
   /* Gradient Colors */
   --gradient-primary: #667eea;
   --gradient-secondary: #764ba2;
-  
+
   /* Additional Colors */
   --error-bg-light: #fff5f5;
   --unread-indicator: #7bb3f0;
   --search-hover: #f0f0f0;
   --search-highlight: #e0e0e0;
-  
+
   /* Background Colors */
   --bg-primary: #ffffff;
   --bg-secondary: #f8f9fa;
@@ -37,7 +37,7 @@
   --bg-hover: rgba(0, 0, 0, 0.02);
   --bg-active: rgba(213, 4, 2, 0.1);
   --bg-focus: rgba(213, 4, 2, 0.04);
-  
+
   /* Border Colors */
   --border-primary: #e9ecef;
   --border-secondary: #ddd;
@@ -45,7 +45,7 @@
   --border-focus: #007bff;
   --border-error: #dc3545;
   --border-success: #28a745;
-  
+
   /* Status Colors */
   --success: #28a745;
   --success-bg: #d4edda;
@@ -55,7 +55,7 @@
   --error-border: #f5c6cb;
   --warning: #ffc107;
   --info: #007bff;
-  
+
   /* Interactive Colors */
   --button-primary: var(--engineering-orange);
   --button-primary-hover: var(--barn-red);
@@ -63,17 +63,19 @@
   --button-secondary-hover: #0056b3;
   --button-success: var(--success);
   --button-success-hover: #1e7e34;
-  
+
   /* Shadow Colors */
   --shadow-light: rgba(0, 0, 0, 0.1);
   --shadow-medium: rgba(0, 0, 0, 0.15);
   --shadow-heavy: rgba(0, 0, 0, 0.4);
   --shadow-focus: rgba(0, 123, 255, 0.25);
   --shadow-primary: rgba(213, 4, 2, 0.2);
-  
+
   /* Typography */
-  --font-family-primary: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-family-primary:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-base: 14px;
@@ -87,7 +89,7 @@
   --line-height-tight: 1.2;
   --line-height-normal: 1.4;
   --line-height-relaxed: 1.5;
-  
+
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -96,7 +98,7 @@
   --spacing-xl: 20px;
   --spacing-2xl: 24px;
   --spacing-3xl: 32px;
-  
+
   /* Border Radius */
   --radius-sm: 3px;
   --radius-md: 4px;
@@ -104,12 +106,12 @@
   --radius-xl: 8px;
   --radius-2xl: 12px;
   --radius-full: 50%;
-  
+
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
-  
+
   /* Z-Index Scale */
   --z-dropdown: 1000;
   --z-modal: 1050;
@@ -144,16 +146,31 @@ body {
    Typography
    ========================================================================== */
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   margin: 0 0 var(--spacing-sm) 0;
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
 }
 
-h1 { font-size: var(--font-size-2xl); }
-h2 { font-size: var(--font-size-xl); }
-h3 { font-size: var(--font-size-lg); }
-h4, h5, h6 { font-size: var(--font-size-base); }
+h1 {
+  font-size: var(--font-size-2xl);
+}
+h2 {
+  font-size: var(--font-size-xl);
+}
+h3 {
+  font-size: var(--font-size-lg);
+}
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-base);
+}
 
 p {
   margin: 0 0 var(--spacing-sm) 0;
@@ -173,7 +190,9 @@ p {
    Form Elements
    ========================================================================== */
 
-input, select, textarea {
+input,
+select,
+textarea {
   font-family: inherit;
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
@@ -186,16 +205,21 @@ input, select, textarea {
   outline: none;
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus,
+select:focus,
+textarea:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px var(--shadow-focus);
 }
 
-input:hover, select:hover, textarea:hover {
+input:hover,
+select:hover,
+textarea:hover {
   border-color: #adb5bd;
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-muted);
 }
 
@@ -495,8 +519,6 @@ select {
   min-width: 80px;
 }
 
-
-
 /* ==========================================================================
    Table Styles
    ========================================================================== */
@@ -599,8 +621,6 @@ table.keys td:nth-child(2) {
   opacity: 1;
   transform: translateY(0);
 }
-
-
 
 /* ==========================================================================
    Buttons & Interactive Elements
@@ -802,14 +822,24 @@ table.keys td:nth-child(2) {
    ========================================================================== */
 
 @keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ==========================================================================
@@ -959,11 +989,6 @@ table.keys td:nth-child(2) {
   text-decoration: none;
 }
 
-
-
-
-
-
 /* Tooltip */
 .tooltip {
   position: fixed;
@@ -1060,8 +1085,6 @@ table.keys td:nth-child(2) {
   font-size: var(--font-size-sm);
 }
 
-
-
 #node-summary {
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
@@ -1101,8 +1124,6 @@ table.keys td:nth-child(2) {
   background-color: #0056b3 !important;
   opacity: 1 !important;
 }
-
-
 
 .editor-stats span {
   padding: 1px 4px;
@@ -1456,7 +1477,6 @@ table.keys td:nth-child(2) {
   z-index: 1;
 }
 
-
 .loom-tree-view li {
   position: relative;
   margin: 1px 0;
@@ -1520,7 +1540,10 @@ table.keys td:nth-child(2) {
 }
 
 /* Text span - flexible, truncates with ellipsis */
-.loom-tree-view li a span:not(.node-status):not(.node-rating):not(.author-indicator) {
+.loom-tree-view
+  li
+  a
+  span:not(.node-status):not(.node-rating):not(.author-indicator) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1533,7 +1556,6 @@ table.keys td:nth-child(2) {
   order: 0; /* Main content in the middle */
   opacity: 0.9; /* Slightly less than 1.0 opacity for all summaries */
 }
-
 
 /* Rating - fixed size, positioned to the right */
 .loom-tree-view li a .node-rating {
@@ -1600,7 +1622,7 @@ table.keys td:nth-child(2) {
 }
 
 .upvoted span:not(.node-status):not(.node-rating):not(.author-indicator) {
-  opacity: 1.0; /* Full opacity for thumbs up nodes */
+  opacity: 1; /* Full opacity for thumbs up nodes */
 }
 
 .loom-tree-view #focused-node > a {

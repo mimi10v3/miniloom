@@ -119,8 +119,7 @@ body {
 /* Table styles now using CSS variables from main.css */
 .mono {
   font-family:
-    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
-    monospace;
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 /* Close button styles - now using CSS variables from main.css */
