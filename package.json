@@ -98,7 +98,10 @@
     }
   },
   "keywords": [],
-  "author": "",
+  "author": {
+    "name": "mimi10v3",
+    "email": "mimi.grace.brooks@gmail.com"
+  },
   "license": "Apache-2.0",
   "devDependencies": {
     "electron": "^37.2.4",
