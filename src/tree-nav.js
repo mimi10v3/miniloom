@@ -4,6 +4,10 @@ class TreeNav {
     this.getLoomTree = getLoomTree;
     this.getFocus = getFocus;
 
+    // Track if collapsed parents are expanded to preserve state during re-renders
+    this.collapsedParentsExpanded = false;
+    this.lastFocusedNodeId = null;
+
     // Initialize when DOM is ready
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => this.init());
@@ -347,33 +351,80 @@ class TreeNav {
 
   createHiddenParentsLi(hiddenParentIds) {
     const li = document.createElement("li");
-    const span = document.createElement("span");
 
-    span.classList.add("hidden-parents-indicator");
-    span.classList.add("tree-node");
+    if (this.collapsedParentsExpanded) {
+      // Show expanded parents
+      this.createExpandedParentsContainer(hiddenParentIds, li);
+      li.classList.add("expanded");
+    } else {
+      // Show collapsed indicator
+      const span = document.createElement("span");
+      span.classList.add("hidden-parents-indicator");
+      span.classList.add("tree-node");
 
-    const link = document.createElement("a");
-    const count = hiddenParentIds.length;
-    const text =
-      count === 1 ? "1 parent node above" : `${count} parent nodes above`;
-    link.innerHTML = `⬆️ [${text}]`;
-    link.title = `Click to expand and show ${count} parent node${count > 1 ? "s" : ""}`;
-    link.classList.add("hidden-parents-link");
+      const link = document.createElement("a");
+      const count = hiddenParentIds.length;
+      const text =
+        count === 1 ? "1 parent node above" : `${count} parent nodes above`;
+      link.innerHTML = `⬆️ [${text}]`;
+      link.title = `Click to expand and show ${count} parent node${count > 1 ? "s" : ""}`;
+      link.classList.add("hidden-parents-link");
 
-    link.onclick = event => {
-      event.stopPropagation();
-      this.expandHiddenParents(hiddenParentIds, li);
-    };
+      link.onclick = event => {
+        event.stopPropagation();
+        this.expandHiddenParents(hiddenParentIds, li);
+      };
 
-    span.appendChild(link);
-    li.appendChild(span);
+      span.appendChild(link);
+      li.appendChild(span);
+    }
 
     return li;
   }
 
+  createExpandedParentsContainer(hiddenParentIds, container) {
+    const loomTree = this.getLoomTree();
+    const expandedContainer = document.createElement("div");
+    expandedContainer.classList.add("expanded-parents-container");
+
+    // Create the parent nodes in reverse order (highest to lowest)
+    for (let i = hiddenParentIds.length - 1; i >= 0; i--) {
+      const parentId = hiddenParentIds[i];
+      const parentNode = loomTree.nodeStore[parentId];
+
+      if (parentNode) {
+        // Create a flat structure without nested ul/li to avoid tree dashes
+        const parentDiv = document.createElement("div");
+        parentDiv.classList.add("expanded-parent-node");
+
+        const nodeSpan = this.createNodeSpan(parentNode, [], false);
+        // Add parent-of-focused class to get the red styling
+        nodeSpan.classList.add("parent-of-focused");
+        const link = this.createNodeLink(parentNode, 1);
+
+        nodeSpan.appendChild(link);
+        parentDiv.appendChild(nodeSpan);
+
+        expandedContainer.appendChild(parentDiv);
+      }
+    }
+
+    container.appendChild(expandedContainer);
+  }
+
   updateTreeView() {
-    this.loomTreeView.innerHTML = "";
     const currentFocus = this.getFocus();
+
+    // Clear collapsed parents expansion state if we've navigated to a different node
+    if (
+      this.lastFocusedNodeId !== null &&
+      this.lastFocusedNodeId !== currentFocus.id
+    ) {
+      this.collapsedParentsExpanded = false;
+    }
+    this.lastFocusedNodeId = currentFocus.id;
+
+    this.loomTreeView.innerHTML = "";
     this.renderTree(currentFocus, this.loomTreeView);
   }
 
@@ -390,35 +441,12 @@ class TreeNav {
   }
 
   expandHiddenParents(hiddenParentIds, indicatorLi) {
-    const loomTree = this.getLoomTree();
-
-    // Create a container for the expanded parents
-    const expandedContainer = document.createElement("div");
-    expandedContainer.classList.add("expanded-parents-container");
-
-    // Create the parent nodes in reverse order (highest to lowest)
-    for (let i = hiddenParentIds.length - 1; i >= 0; i--) {
-      const parentId = hiddenParentIds[i];
-      const parentNode = loomTree.nodeStore[parentId];
-
-      if (parentNode) {
-        // Create a flat structure without nested ul/li to avoid tree dashes
-        const parentDiv = document.createElement("div");
-        parentDiv.classList.add("expanded-parent-node");
-
-        const nodeSpan = this.createNodeSpan(parentNode, [], false);
-        const link = this.createNodeLink(parentNode, 1);
-
-        nodeSpan.appendChild(link);
-        parentDiv.appendChild(nodeSpan);
-
-        expandedContainer.appendChild(parentDiv);
-      }
-    }
+    // Set the flag to preserve expansion state during re-renders
+    this.collapsedParentsExpanded = true;
 
     // Replace the indicator with the expanded parents
     indicatorLi.innerHTML = "";
-    indicatorLi.appendChild(expandedContainer);
+    this.createExpandedParentsContainer(hiddenParentIds, indicatorLi);
     indicatorLi.classList.add("expanded");
   }
 

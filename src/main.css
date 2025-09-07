@@ -862,7 +862,7 @@ table.keys td:nth-child(2) {
 
 .node-status.status-pending {
   color: var(--warning);
-  animation: spin 1s linear infinite;
+  animation: spin 0.6s linear infinite;
 }
 
 .node-status.status-unread {
@@ -1321,7 +1321,7 @@ table.keys td:nth-child(2) {
 }
 
 .die.rolling {
-  animation: spin 0.4s linear infinite;
+  animation: spin 0.6s linear infinite;
   opacity: 1;
   visibility: visible;
 }
