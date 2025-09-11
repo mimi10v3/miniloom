@@ -13,6 +13,7 @@ let mainWindow = null;
 let tempFilePath = null;
 let currentFilePath = null;
 let recentFiles = [];
+let lastSavedTimestamp = null;
 const MAX_RECENT_FILES = 5;
 
 function setCurrentFile(filePath, isTemp = false) {
@@ -299,7 +300,7 @@ function initializeTempFile() {
     fs.mkdirSync(tempDir);
   }
 
-  tempFilePath = path.join(tempDir, "temp_loom.json");
+  tempFilePath = path.join(tempDir, "temp_tree.json");
   currentFilePath = tempFilePath;
 }
 
@@ -422,21 +423,21 @@ function addToRecentFiles(filePath) {
 function buildFileMenuItems() {
   const fileMenuItems = [
     {
-      label: "New Loom",
+      label: "New",
       accelerator: "CmdOrCtrl+N",
       click() {
         mainWindow.webContents.send("invoke-action", "new-loom");
       },
     },
     {
-      label: "Open Loom",
+      label: "Open",
       accelerator: "CmdOrCtrl+O",
       click() {
         mainWindow.webContents.send("invoke-action", "load-file");
       },
     },
     {
-      label: "Save Loom",
+      label: "Save As",
       accelerator: "CmdOrCtrl+S",
       click() {
         mainWindow.webContents.send("invoke-action", "save-file");
@@ -518,21 +519,21 @@ function updateMenu() {
 
 // File operation handlers
 ipcMain.handle("save-file", async (event, data) => {
-  let filePath =
-    currentFilePath && currentFilePath !== tempFilePath
-      ? currentFilePath
-      : (
-          await dialog.showSaveDialog(mainWindow, {
-            title: "Save Loom As",
-            filters: [{ name: "JSON Files", extensions: ["json"] }],
-          })
-        ).filePath;
+  // Always show save dialog to save as a new file
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: "Save As",
+    filters: [{ name: "JSON Files", extensions: ["json"] }],
+  });
 
   if (filePath) {
     fs.writeFileSync(filePath, JSON.stringify(data));
+    lastSavedTimestamp = new Date();
 
-    // Delete temp file if saving to a new location
-    if (currentFilePath === tempFilePath && filePath !== tempFilePath) {
+    // Only delete temp file if we're saving over the temp file itself
+    if (currentFilePath === tempFilePath && filePath === tempFilePath) {
+      // This shouldn't happen with the new save-as behavior, but keep for safety
+    } else if (currentFilePath === tempFilePath && filePath !== tempFilePath) {
+      // When saving temp file to a new location, delete the temp file
       try {
         if (fs.existsSync(tempFilePath)) {
           fs.unlinkSync(tempFilePath);
@@ -541,6 +542,7 @@ ipcMain.handle("save-file", async (event, data) => {
         console.error("Error deleting temp file:", error);
       }
     }
+    // If saving from a regular file to a new file, leave the original file unchanged
 
     setCurrentFile(filePath);
     mainWindow.webContents.send(
@@ -548,7 +550,8 @@ ipcMain.handle("save-file", async (event, data) => {
       path.basename(filePath),
       new Date(),
       filePath,
-      false
+      false,
+      lastSavedTimestamp
     );
   }
 });
@@ -558,12 +561,14 @@ ipcMain.handle("new-loom", async event => {
   if (await checkUnsavedChanges()) {
     // Reset to temp file for new loom
     setCurrentFile(tempFilePath, true);
+    lastSavedTimestamp = null; // No last saved time for new loom
     mainWindow.webContents.send(
       "update-filename",
       "Unsaved",
       null,
       tempFilePath,
-      true
+      true,
+      lastSavedTimestamp
     ); // isTemp = true
 
     // Send a simple signal to reset the UI
@@ -577,7 +582,7 @@ ipcMain.handle("load-file", async event => {
   // Check for unsaved changes first
   if (await checkUnsavedChanges()) {
     const { filePaths } = await dialog.showOpenDialog(mainWindow, {
-      title: "Open Loom",
+      title: "Open",
       filters: [{ name: "JSON Files", extensions: ["json"] }],
       properties: ["openFile"],
     });
@@ -589,13 +594,15 @@ ipcMain.handle("load-file", async event => {
 
       // Load the file in the current window
       const stats = getFileStats(filePath);
+      lastSavedTimestamp = stats.mtime; // Use file's modification time as last saved
       setCurrentFile(filePath, false);
       mainWindow.webContents.send(
         "update-filename",
         path.basename(filePath),
-        stats.mtime,
+        stats.birthtime, // Use birthtime (creation time) for Created timestamp
         filePath,
-        false
+        false,
+        lastSavedTimestamp
       );
 
       // Send the data to the renderer
@@ -617,13 +624,15 @@ ipcMain.handle("load-recent-file", async (event, filePath) => {
 
         // Load the file in the current window
         const stats = getFileStats(filePath);
+        lastSavedTimestamp = stats.mtime; // Use file's modification time as last saved
         setCurrentFile(filePath, false);
         mainWindow.webContents.send(
           "update-filename",
           path.basename(filePath),
-          stats.mtime,
+          stats.birthtime, // Use birthtime (creation time) for Created timestamp
           filePath,
-          false
+          false,
+          lastSavedTimestamp
         );
 
         // Return the data directly to the renderer
@@ -652,12 +661,14 @@ ipcMain.handle("renderer-ready", async event => {
 
       if (hasContent(data)) {
         setCurrentFile(tempFilePath, true);
+        lastSavedTimestamp = new Date(); // Set current time as last saved for temp file
         mainWindow.webContents.send(
           "update-filename",
           "Unsaved",
           new Date(),
           tempFilePath,
-          true
+          true,
+          lastSavedTimestamp
         );
 
         // Show warning about restored temp file
@@ -679,12 +690,14 @@ ipcMain.handle("renderer-ready", async event => {
 
   // Set up for fresh start
   setCurrentFile(tempFilePath, true);
+  lastSavedTimestamp = null; // No last saved time for fresh start
   mainWindow.webContents.send(
     "update-filename",
     "Unsaved",
     null,
     tempFilePath,
-    true
+    true,
+    lastSavedTimestamp
   );
   return null;
 });
@@ -724,10 +737,29 @@ ipcMain.handle("auto-save", (event, data) => {
       ? currentFilePath
       : tempFilePath;
   fs.writeFileSync(savePath, JSON.stringify(userFileData));
+  lastSavedTimestamp = new Date();
 
   // Update current file path if saving to temp
   if (savePath === tempFilePath) {
     currentFilePath = tempFilePath;
+  }
+
+  // Update the filename display with the new last saved timestamp
+  if (mainWindow && currentFilePath) {
+    const isTemp = currentFilePath === tempFilePath;
+    const filename = isTemp ? "Unsaved" : path.basename(currentFilePath);
+    const creationTime = isTemp
+      ? new Date()
+      : getFileStats(currentFilePath).birthtime; // Use birthtime (creation time) not mtime (modification time)
+
+    mainWindow.webContents.send(
+      "update-filename",
+      filename,
+      creationTime,
+      currentFilePath,
+      isTemp,
+      lastSavedTimestamp
+    );
   }
 });
 

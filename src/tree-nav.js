@@ -184,7 +184,14 @@ class TreeNav {
     }
 
     const textSpan = document.createElement("span");
-    textSpan.textContent = displayText;
+
+    // Add 🛑 emoji to the text content if the node is Complete (finishReason === "stop")
+    if (node.finishReason === "stop") {
+      textSpan.textContent = displayText + " 🛑";
+      textSpan.title = "Complete - this branch is ended";
+    } else {
+      textSpan.textContent = displayText;
+    }
 
     // Make new/unread nodes normal weight and style
     if (node.read === false) {
@@ -200,14 +207,6 @@ class TreeNav {
     }
 
     link.appendChild(textSpan);
-
-    // Add 🛑 emoji if the node is Complete (finishReason === "stop")
-    if (node.finishReason === "stop") {
-      const completeEmoji = document.createElement("span");
-      completeEmoji.textContent = " 🛑";
-      completeEmoji.title = "Complete - this branch is ended";
-      link.appendChild(completeEmoji);
-    }
 
     // Add rating last (on the right)
     link.appendChild(ratingSpan);
@@ -241,7 +240,7 @@ class TreeNav {
       // Show badge with subtree count
       statusSpan.classList.add("status-badge");
       const totalSubtreeNodes = node.treeStats.totalChildNodes;
-      statusSpan.textContent = ` ${totalSubtreeNodes}`;
+      statusSpan.textContent = ` ${window.utils.formatNumber(totalSubtreeNodes)}`;
 
       // Add red class if there are recent nodes
       if (node.treeStats.recentNodes > 0) {
@@ -318,8 +317,8 @@ class TreeNav {
     const lastChangeTime = node.treeStats.lastChildUpdate || node.timestamp;
     const formattedLastChange = window.utils.formatTimestamp(lastChangeTime);
 
-    badgeSpan.textContent = ` ${totalSubtreeNodes}`;
-    badgeSpan.title = `${node.children.length} immediate children, ${totalSubtreeNodes} total nodes in subtree${node.treeStats.unreadChildNodes > 0 ? `, ${node.treeStats.unreadChildNodes} unread` : ""}${node.treeStats.recentNodes > 0 ? `, ${node.treeStats.recentNodes} recent (5min)` : ""}\n🕐 Last change: ${formattedLastChange}`;
+    badgeSpan.textContent = ` ${window.utils.formatNumber(totalSubtreeNodes)}`;
+    badgeSpan.title = `${window.utils.formatNumber(node.children.length)} immediate children, ${window.utils.formatNumber(totalSubtreeNodes)} total nodes in subtree${node.treeStats.unreadChildNodes > 0 ? `, ${window.utils.formatNumber(node.treeStats.unreadChildNodes)} unread` : ""}${node.treeStats.recentNodes > 0 ? `, ${window.utils.formatNumber(node.treeStats.recentNodes)} recent (5min)` : ""}\n🕐 Last change: ${formattedLastChange}`;
 
     return badgeSpan;
   }

@@ -175,12 +175,21 @@ function calculateNetChanges(currentText, previousText) {
 }
 
 /**
- * Format net change for display with +/- prefix
+ * Format number with thousands separators for display
+ * @param {number} num - The number to format
+ * @returns {string} - Formatted number with commas as thousands separators
+ */
+function formatNumber(num) {
+  return num.toLocaleString();
+}
+
+/**
+ * Format net change for display with +/- prefix and number separators
  * @param {number} change - The net change value
- * @returns {string} - Formatted string with +/- prefix
+ * @returns {string} - Formatted string with +/- prefix and separators
  */
 function formatNetChange(change) {
-  return `${change > 0 ? "+" : ""}${change}`;
+  return `${change > 0 ? "+" : ""}${formatNumber(change)}`;
 }
 
 /**
@@ -209,16 +218,16 @@ function generateSubtreeTooltipText(node) {
   );
 
   return (
-    `🍃 Total nodes: ${node.treeStats.totalChildNodes}\n` +
-    `👶 Direct children: ${node.children.length}\n` +
-    `📏 Max depth: ${node.treeStats.maxChildDepth}\n` +
+    `🍃 Total nodes: ${formatNumber(node.treeStats.totalChildNodes)}\n` +
+    `👶 Direct children: ${formatNumber(node.children.length)}\n` +
+    `📏 Max depth: ${formatNumber(node.treeStats.maxChildDepth)}\n` +
     `🕐 Last: ${subtreeDate}\n` +
-    `📝 Max words: ${node.treeStats.maxWordCountOfChildren}\n` +
-    `🔤 Max chars: ${node.treeStats.maxCharCountOfChildren}\n` +
-    `🌱 Unread nodes: ${node.treeStats.unreadChildNodes || 0}\n` +
-    `👍 Rated Good: ${node.treeStats.ratedUpNodes || 0}\n` +
-    `👎 Rated Bad: ${node.treeStats.ratedDownNodes || 0}\n` +
-    `🔥 Recent nodes (5min): ${node.treeStats.recentNodes || 0}`
+    `📝 Max words: ${formatNumber(node.treeStats.maxWordCountOfChildren)}\n` +
+    `🔤 Max chars: ${formatNumber(node.treeStats.maxCharCountOfChildren)}\n` +
+    `🌱 Unread nodes: ${formatNumber(node.treeStats.unreadChildNodes || 0)}\n` +
+    `👍 Rated Good: ${formatNumber(node.treeStats.ratedUpNodes || 0)}\n` +
+    `👎 Rated Bad: ${formatNumber(node.treeStats.ratedDownNodes || 0)}\n` +
+    `🔥 Recent nodes (5min): ${formatNumber(node.treeStats.recentNodes || 0)}`
   );
 }
 
@@ -264,6 +273,7 @@ if (typeof window !== "undefined") {
     extractThreeWords,
     calculateTextStats,
     calculateNetChanges,
+    formatNumber,
     formatNetChange,
     getNetChangeClass,
     generateSubtreeTooltipText,

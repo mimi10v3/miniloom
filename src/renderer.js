@@ -87,6 +87,10 @@ function updateFocus(nodeId, reason = "unknown") {
 
   updateUI();
 
+  // Auto-scroll to bottom of editor content when focusing on a new node
+  // This ensures users see the fresh new content at the bottom
+  DOM.editor.scrollTop = DOM.editor.scrollHeight;
+
   // Auto-save when focus changes due to content creation
   if (reason === "editor-auto-save") {
     fileManager.autoSave();
@@ -120,25 +124,29 @@ function updateTreeStatsDisplay() {
     rootNode.treeStats.lastChildUpdate || new Date(rootNode.timestamp);
 
   if (DOM.treeTotalNodes) {
-    DOM.treeTotalNodes.textContent = rootNode.treeStats.totalChildNodes;
+    DOM.treeTotalNodes.textContent = window.utils.formatNumber(
+      rootNode.treeStats.totalChildNodes
+    );
   }
   if (DOM.treeStatsSummary) {
     const tooltipText =
-      `🍃 Total nodes: ${rootNode.treeStats.totalChildNodes}\n` +
-      `📏 Max depth: ${rootNode.treeStats.maxChildDepth}\n` +
+      `🍃 Total nodes: ${window.utils.formatNumber(rootNode.treeStats.totalChildNodes)}\n` +
+      `📏 Max depth: ${window.utils.formatNumber(rootNode.treeStats.maxChildDepth)}\n` +
       `🕐 Last: ${lastUpdateTime ? window.utils.formatTimestamp(lastUpdateTime) : "N/A"}\n` +
-      `📝 Max words: ${rootNode.treeStats.maxWordCountOfChildren}\n` +
-      `🔤 Max chars: ${rootNode.treeStats.maxCharCountOfChildren || 0}\n` +
-      `🌱 Unread nodes: ${rootNode.treeStats.unreadChildNodes || 0}\n` +
-      `👍 Rated Good: ${rootNode.treeStats.ratedUpNodes || 0}\n` +
-      `👎 Rated Bad: ${rootNode.treeStats.ratedDownNodes || 0}\n` +
-      `🔥 Recent nodes (5min): ${rootNode.treeStats.recentNodes || 0}`;
+      `📝 Max words: ${window.utils.formatNumber(rootNode.treeStats.maxWordCountOfChildren)}\n` +
+      `🔤 Max chars: ${window.utils.formatNumber(rootNode.treeStats.maxCharCountOfChildren || 0)}\n` +
+      `🌱 Unread nodes: ${window.utils.formatNumber(rootNode.treeStats.unreadChildNodes || 0)}\n` +
+      `👍 Rated Good: ${window.utils.formatNumber(rootNode.treeStats.ratedUpNodes || 0)}\n` +
+      `👎 Rated Bad: ${window.utils.formatNumber(rootNode.treeStats.ratedDownNodes || 0)}\n` +
+      `🔥 Recent nodes (5min): ${window.utils.formatNumber(rootNode.treeStats.recentNodes || 0)}`;
     DOM.treeStatsSummary.setAttribute("data-tooltip-content", tooltipText);
   }
 
   // Update editor footer stats
   if (DOM.editorWordCount)
-    DOM.editorWordCount.textContent = appState.focusedNode.wordCount;
+    DOM.editorWordCount.textContent = window.utils.formatNumber(
+      appState.focusedNode.wordCount
+    );
   if (DOM.editorWordChange) {
     DOM.editorWordChange.textContent = `(${window.utils.formatNetChange(appState.focusedNode.netWordsAdded)})`;
     DOM.editorWordChange.className = window.utils.getNetChangeClass(
@@ -146,7 +154,9 @@ function updateTreeStatsDisplay() {
     );
   }
   if (DOM.editorCharCount)
-    DOM.editorCharCount.textContent = appState.focusedNode.characterCount;
+    DOM.editorCharCount.textContent = window.utils.formatNumber(
+      appState.focusedNode.characterCount
+    );
   if (DOM.editorCharChange) {
     DOM.editorCharChange.textContent = `(${window.utils.formatNetChange(appState.focusedNode.netCharsAdded)})`;
     DOM.editorCharChange.className = window.utils.getNetChangeClass(
@@ -188,7 +198,7 @@ function updateFocusedNodeStats() {
       const finishReasonText = window.utils.getFinishReasonDisplayText(
         focusedNode.finishReason
       );
-      DOM.finishReason.textContent = ` | 🛑 ${finishReasonText}`;
+      DOM.finishReason.textContent = `| 🛑 ${finishReasonText}`;
       DOM.finishReason.style.display = "inline";
     } else {
       DOM.finishReason.style.display = "none";
@@ -205,7 +215,7 @@ function updateFocusedNodeStats() {
         "data-tooltip",
         window.utils.generateSubtreeTooltipText(focusedNode)
       );
-      DOM.subtreeInfo.textContent = `🍃 ${focusedNode.treeStats.totalChildNodes} nodes`;
+      DOM.subtreeInfo.textContent = `🍃 ${window.utils.formatNumber(focusedNode.treeStats.totalChildNodes)} nodes`;
     } else {
       DOM.subtreeInfo.style.display = "none";
     }
@@ -403,7 +413,7 @@ const onSettingsUpdated = async () => {
 
 // Electron API event handlers
 window.electronAPI.onUpdateFilename(
-  (event, filename, creationTime, filePath, isTemp) => {
+  (event, filename, creationTime, filePath, isTemp, lastSavedTime) => {
     const filenameElement = document.getElementById("current-filename");
     if (filenameElement) {
       // Remove .json extension for display
@@ -416,12 +426,22 @@ window.electronAPI.onUpdateFilename(
       } else {
         // For regular files, show filename with hover info
         filenameElement.innerHTML = `💾 ${displayName}`;
+
+        const tooltipLines = [`File: ${filePath || "Unknown"}`];
+
         if (creationTime) {
-          const formattedTime = new Date(creationTime).toLocaleString();
-          filenameElement.title = `File: ${filePath || "Unknown"}\nCreated: ${formattedTime}`;
-        } else {
-          filenameElement.title = `File: ${filePath || "Unknown"}`;
+          const formattedCreationTime =
+            window.utils.formatTimestamp(creationTime);
+          tooltipLines.push(`Created: ${formattedCreationTime}`);
         }
+
+        if (lastSavedTime) {
+          const formattedLastSavedTime =
+            window.utils.formatTimestamp(lastSavedTime);
+          tooltipLines.push(`Last Saved: ${formattedLastSavedTime}`);
+        }
+
+        filenameElement.title = tooltipLines.join("\n");
       }
     }
   }

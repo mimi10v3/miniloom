@@ -1083,6 +1083,7 @@ table.keys td:nth-child(2) {
 .finish-reason {
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
+  margin-right: 2px !important;
 }
 
 #node-summary {
