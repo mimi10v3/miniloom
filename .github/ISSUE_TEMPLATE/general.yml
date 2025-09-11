@@ -10,7 +10,7 @@ body:
       description: Describe your issue, question, or concern
     validations:
       required: true
-  
+
   - type: textarea
     id: context
     attributes:

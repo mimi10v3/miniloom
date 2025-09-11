@@ -1,2 +1,11 @@
 node_modules/
 local/
+.DS_Store
+
+# Build outputs
+dist/
+build/
+out/
+
+# Electron builder cache
+node_modules/.cache/

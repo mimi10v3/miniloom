@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for suggesting a feature! Please describe what you'd like to see.
-  
+
   - type: textarea
     id: problem
     attributes:
@@ -16,7 +16,7 @@ body:
       placeholder: I'm trying to do X but currently...
     validations:
       required: true
-  
+
   - type: textarea
     id: solution
     attributes:
@@ -25,13 +25,13 @@ body:
       placeholder: I'd like miniloom to...
     validations:
       required: true
-  
+
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives Considered
       description: Any alternative solutions or workarounds you've considered?
-  
+
   - type: textarea
     id: additional
     attributes:

@@ -3,15 +3,112 @@
   "productName": "MiniHF MiniLoom",
   "version": "1.0.0",
   "description": "MiniHF MiniLoom - AI Text Generation Tool",
-  "main": "main.js",
+  "main": "src/main.js",
+  "homepage": "https://github.com/JD-P/miniloom",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "npm run format:check && electron-builder",
+    "build:win": "npm run format:check && electron-builder --win",
+    "build:mac": "npm run format:check && electron-builder --mac",
+    "build:linux": "npm run format:check && electron-builder --linux",
+    "dist": "npm run build",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.minihf.miniloom",
+    "productName": "MiniHF MiniLoom",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "prompts/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/electron-builder.env"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "JD-P",
+      "repo": "miniloom"
+    }
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": {
+    "name": "mimi10v3",
+    "email": "mimi.grace.brooks@gmail.com"
+  },
+  "license": "Apache-2.0",
   "devDependencies": {
-    "electron": "^37.2.4"
+    "electron": "^37.2.4",
+    "prettier": "^3.6.2",
+    "electron-builder": "^25.0.5"
   },
   "dependencies": {
     "diff-match-patch": "^1.0.5",

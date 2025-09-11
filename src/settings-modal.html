@@ -1,0 +1,331 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sampler Settings</title>
+    <link rel="stylesheet" href="main.css" />
+    <link rel="stylesheet" href="settings-modal.css" />
+  </head>
+  <body>
+    <div id="settings-pane">
+      <!-- Welcome message for new users -->
+      <div
+        id="welcome-message"
+        style="
+          display: none;
+          background: linear-gradient(
+            135deg,
+            var(--gradient-primary) 0%,
+            var(--gradient-secondary) 100%
+          );
+          color: white;
+          padding: 20px;
+          margin: 0;
+          text-align: center;
+        "
+      >
+        <h2 style="margin: 0 0 10px 0; font-size: 24px">
+          🎉 Welcome to MiniLoom!
+        </h2>
+        <p style="margin: 0 0 15px 0; font-size: 16px; opacity: 0.9">
+          To get started, please create a Service and add a valid API Key from
+          that LLM provider.
+        </p>
+        <p style="margin: 0; font-size: 14px; opacity: 0.8">
+          We've created a "Default" sampler, which you can change. Samplers
+          control how many branches are generated, how long each branch is, and
+          how creative they are.
+        </p>
+      </div>
+
+      <div id="settings-tabs">
+        <button class="tab-btn active" data-tab="services">🌐 Services</button>
+        <button class="tab-btn" data-tab="api-keys">🔑 API Keys</button>
+        <button class="tab-btn" data-tab="samplers">🎲 Samplers</button>
+        <button class="tab-btn" data-tab="favorites">❤️ Favorites</button>
+        <button class="close-btn" id="close-settings">×</button>
+      </div>
+
+      <!-- Services Tab -->
+      <div id="services-tab" class="tab-content visible-tab">
+        <!-- Services Selection and Add -->
+        <div class="row">
+          <label for="service-select">Select Service:</label>
+          <select id="service-select">
+            <option value="">-- Select a service --</option>
+          </select>
+          <button class="btn primary" id="add-service-btn">Add New</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Services Form -->
+        <form id="services-form" style="display: none">
+          <div class="form-field">
+            <label for="service-name">Service Name</label>
+            <div style="display: flex; align-items: center">
+              <input
+                type="text"
+                id="service-name"
+                class="modelNameType"
+                placeholder="e.g. My OpenAI"
+              />
+              <span
+                class="help-icon"
+                title="Names allow A–Z, a–z, 0–9, dash, underscore, and dot. Maximum 20 characters."
+                >?</span
+              >
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="sampling-method">Sampling Method</label>
+              <select id="sampling-method">
+                <option value="openai">OpenAI Completions</option>
+                <option value="openai-chat">OpenAI Chat Completions</option>
+                <option value="openrouter">OpenRouter API</option>
+                <option value="together">Together API</option>
+                <option value="anthropic">Anthropic Claude</option>
+                <option value="google">Google Gemini</option>
+                <option value="base">Custom</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="service-api-delay">API Delay (milliseconds)</label>
+              <input
+                type="text"
+                id="service-api-delay"
+                class="intType"
+                placeholder="3000"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="service-api-url">API URL</label>
+              <input
+                type="text"
+                id="service-api-url"
+                class="URLType"
+                placeholder="https://api.openai.com/"
+              />
+            </div>
+            <div class="form-field">
+              <label for="service-model-name">Model Name</label>
+              <input
+                type="text"
+                id="service-model-name"
+                class="modelNameType"
+                placeholder="gpt-4"
+              />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn"
+              id="delete-service-btn"
+              style="display: none"
+            >
+              Delete
+            </button>
+            <button type="button" class="btn" id="cancel-service-btn">
+              Cancel
+            </button>
+            <button type="button" class="btn primary" id="save-service-btn">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Samplers Tab -->
+      <div id="samplers-tab" class="tab-content">
+        <!-- Samplers Selection and Add -->
+        <div class="row">
+          <label for="sampler-select">Select Sampler:</label>
+          <select id="sampler-select">
+            <option value="">-- Select a sampler --</option>
+          </select>
+          <button class="btn primary" id="add-sampler-btn">Add New</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Samplers Form -->
+        <form id="samplers-form" style="display: none">
+          <div class="form-field">
+            <label for="sampler-name">Sampler Name</label>
+            <div style="display: flex; align-items: center">
+              <input
+                type="text"
+                id="sampler-name"
+                class="modelNameType"
+                placeholder="e.g. Creative Writing"
+              />
+              <span
+                class="help-icon"
+                title="Names allow A–Z, a–z, 0–9, dash, underscore, and dot. Maximum 20 characters."
+                >?</span
+              >
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="output-branches">Output Branches</label>
+              <input
+                type="text"
+                id="output-branches"
+                class="intType"
+                placeholder="2"
+              />
+            </div>
+            <div class="form-field">
+              <label for="temperature">Temperature</label>
+              <input
+                type="text"
+                id="temperature"
+                class="floatType"
+                placeholder="0.9"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="tokens-per-branch">Tokens Per Branch</label>
+              <input
+                type="text"
+                id="tokens-per-branch"
+                class="intType"
+                placeholder="256"
+              />
+            </div>
+            <div class="form-field">
+              <label for="top-p">Top-P</label>
+              <input type="text" id="top-p" class="floatType" placeholder="1" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label for="top-k">Top-K</label>
+              <input type="text" id="top-k" class="intType" placeholder="100" />
+            </div>
+            <div class="form-field">
+              <label for="repetition-penalty">Repetition Penalty</label>
+              <input
+                type="text"
+                id="repetition-penalty"
+                class="floatType"
+                placeholder="1"
+              />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn"
+              id="delete-sampler-btn"
+              style="display: none"
+            >
+              Delete
+            </button>
+            <button type="button" class="btn" id="cancel-sampler-btn">
+              Cancel
+            </button>
+            <button type="button" class="btn primary" id="save-sampler-btn">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- API Keys Tab -->
+      <div id="api-keys-tab" class="tab-content">
+        <!-- Add Key Form -->
+        <div class="row" style="gap: 4px; align-items: center">
+          <label for="key-label" style="min-width: auto; margin: 0"
+            >Key Name</label
+          >
+          <input
+            type="text"
+            id="key-name"
+            class="modelNameType"
+            placeholder="e.g. OPENAI"
+            style="margin: 0"
+          />
+          <span
+            class="help-icon"
+            title="Names allow A–Z, a–z, 0–9, dash, underscore, and dot. Maximum 20 characters."
+            >?</span
+          >
+          <label for="key-value" style="min-width: auto; margin: 0"
+            >Secret</label
+          >
+          <input
+            type="password"
+            id="key-value"
+            placeholder="paste your API key"
+            style="margin: 0"
+          />
+          <button class="btn primary" id="add-key-btn">Add</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Keys Table -->
+        <table class="keys mono">
+          <thead>
+            <tr>
+              <th style="width: 22%">Name</th>
+              <th>Secret</th>
+              <th style="width: 150px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="keys-tbody">
+            <tr>
+              <td colspan="3" class="muted">No API keys saved.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Favorites Tab -->
+      <div id="favorites-tab" class="tab-content">
+        <div class="row" style="margin-bottom: 8px">
+          <label>Favorites Configuration</label>
+          <span class="muted"
+            >Configure up to 8 favorite combinations of Service, Key, and
+            Sampler for quick access.</span
+          >
+        </div>
+
+        <!-- Favorites Table -->
+        <table class="keys">
+          <thead>
+            <tr>
+              <th style="width: 50px">#</th>
+              <th style="width: 100px">Name</th>
+              <th style="width: 150px">Service</th>
+              <th style="width: 150px">Key</th>
+              <th style="width: 150px">Sampler</th>
+            </tr>
+          </thead>
+          <tbody id="favorites-tbody">
+            <!-- Favorites rows will be populated by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer" id="footer"></div>
+    <script src="utils.js"></script>
+    <script src="settings-modal.js"></script>
+  </body>
+</html>
