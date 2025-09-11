@@ -171,7 +171,9 @@ function updateTreeStatsDisplay() {
 function updateFocusedNodeStats() {
   const focusedNode = appState.focusedNode;
 
-  DOM.nodeSummary.textContent = focusedNode.summary || "Unsaved";
+  DOM.nodeSummary.textContent = window.utils.getNodeSummaryDisplayText(
+    focusedNode.summary
+  );
   DOM.nodeAuthor.textContent =
     focusedNode.type === "user" ? "Human" : focusedNode.model || "Unknown";
   DOM.nodeAuthorEmoji.textContent = focusedNode.type === "gen" ? "🤖" : "👤";
@@ -484,17 +486,13 @@ async function updateFocusSummary() {
     try {
       let summary = await llmService.generateSummary(prompt);
       if (summary.trim() === "") {
-        summary = "Summary Not Given";
+        summary = "Branch Empty";
       }
       appState.loomTree.updateNode(currentFocus, newPrompt, summary);
 
       updateSearchIndexForNode(currentFocus);
     } catch (error) {
-      appState.loomTree.updateNode(
-        currentFocus,
-        newPrompt,
-        "Server Response Error"
-      );
+      appState.loomTree.updateNode(currentFocus, newPrompt, "Branch Error");
 
       updateSearchIndexForNode(currentFocus);
     }
