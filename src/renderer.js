@@ -175,8 +175,17 @@ function updateFocusedNodeStats() {
     focusedNode.summary
   );
   DOM.nodeAuthor.textContent =
-    focusedNode.type === "user" ? "Human" : focusedNode.model || "Unknown";
-  DOM.nodeAuthorEmoji.textContent = focusedNode.type === "gen" ? "🤖" : "👤";
+    focusedNode.type === "user"
+      ? "Human"
+      : focusedNode.type === "import"
+        ? "Imported"
+        : focusedNode.model || "Unknown";
+  DOM.nodeAuthorEmoji.textContent =
+    focusedNode.type === "gen"
+      ? "🤖"
+      : focusedNode.type === "import"
+        ? "📥"
+        : "👤";
   DOM.nodePosition.innerHTML = `<strong>📍 ${focusedNode.id}:&nbsp</strong>`;
 
   // Update timestamp
@@ -326,7 +335,8 @@ function setupEditorHandlers() {
     // Update user node content while typing
     if (
       appState.focusedNode.children.length === 0 &&
-      appState.focusedNode.type === "user" &&
+      (appState.focusedNode.type === "user" ||
+        appState.focusedNode.type === "import") &&
       !appState.updatingNode
     ) {
       appState.updatingNode = true;
@@ -348,7 +358,8 @@ function setupEditorHandlers() {
     if (prompt.length % 32 === 0) {
       if (
         appState.focusedNode.children.length === 0 &&
-        appState.focusedNode.type === "user" &&
+        (appState.focusedNode.type === "user" ||
+          appState.focusedNode.type === "import") &&
         ["base"].includes(params["sampling-method"]) &&
         !appState.updatingNode
       ) {
@@ -474,7 +485,8 @@ var treeStatsRecalcIntervalId = setInterval(treeStatsRecalcTick, 60000); // Ever
  */
 async function updateFocusSummary() {
   if (
-    appState.focusedNode.type === "user" &&
+    (appState.focusedNode.type === "user" ||
+      appState.focusedNode.type === "import") &&
     appState.focusedNode.children.length === 0 &&
     !appState.updatingNode
   ) {

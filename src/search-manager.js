@@ -182,9 +182,18 @@ class SearchManager {
       const formattedDate = window.utils.formatTimestamp(result.node.timestamp);
 
       // Get author info
-      const authorEmoji = result.node.type === "gen" ? "🤖" : "👤";
+      const authorEmoji =
+        result.node.type === "gen"
+          ? "🤖"
+          : result.node.type === "import"
+            ? "📥"
+            : "👤";
       const authorName =
-        result.node.type === "user" ? "Human" : result.node.model || "Unknown";
+        result.node.type === "user"
+          ? "Human"
+          : result.node.type === "import"
+            ? "Imported"
+            : result.node.model || "Unknown";
 
       // Add rating indicators
       let ratingHtml = "";
