@@ -275,6 +275,22 @@ function createWindow(initialData = null) {
 
     initializeTempFile();
 
+    // Handle window close - intercept to check for unsaved changes
+    window.on("close", async event => {
+      // Prevent the default close behavior
+      event.preventDefault();
+
+      const canClose = await checkUnsavedChanges();
+      if (canClose) {
+        // If user confirmed close, allow the window to close
+        window.destroy();
+        if (window === mainWindow) {
+          mainWindow = null;
+        }
+      }
+      // If user cancelled, the window will remain open
+    });
+
     window.on("closed", function () {
       if (window === mainWindow) {
         mainWindow = null;
@@ -835,6 +851,19 @@ app
     }
   })
   .then(createWindow);
+
+// Handle app quit - intercept to check for unsaved changes
+app.on("before-quit", async event => {
+  // Prevent the default quit behavior
+  event.preventDefault();
+
+  const canQuit = await checkUnsavedChanges();
+  if (canQuit) {
+    // If user confirmed quit, allow the app to quit
+    app.exit(0);
+  }
+  // If user cancelled, the app will continue running
+});
 
 app.on("window-all-closed", function () {
   if (process.platform !== "darwin") app.quit();
