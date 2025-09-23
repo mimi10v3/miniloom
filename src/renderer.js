@@ -3,7 +3,6 @@ class AppState {
     this.loomTree = new LoomTree();
     this.focusedNode = this.loomTree.root;
     this.samplerSettingsStore = {};
-    this.updatingNode = false; // lock to prevent generating multiple summaries at once
     this.secondsSinceLastSave = 0;
   }
 
@@ -336,10 +335,8 @@ function setupEditorHandlers() {
     if (
       appState.focusedNode.children.length === 0 &&
       (appState.focusedNode.type === "user" ||
-        appState.focusedNode.type === "import") &&
-      !appState.updatingNode
+        appState.focusedNode.type === "import")
     ) {
-      appState.updatingNode = true;
       appState.loomTree.updateNode(
         appState.focusedNode,
         prompt,
@@ -347,8 +344,6 @@ function setupEditorHandlers() {
       );
 
       updateSearchIndexForNode(appState.focusedNode);
-
-      appState.updatingNode = false;
     }
 
     // Update character/word count on every keystroke
@@ -360,20 +355,15 @@ function setupEditorHandlers() {
         appState.focusedNode.children.length === 0 &&
         (appState.focusedNode.type === "user" ||
           appState.focusedNode.type === "import") &&
-        ["base"].includes(params["sampling-method"]) &&
-        !appState.updatingNode
+        ["base"].includes(params["sampling-method"])
       ) {
         try {
-          appState.updatingNode = true;
           const summary = await llmService.generateSummary(prompt);
           appState.loomTree.updateNode(appState.focusedNode, prompt, summary);
 
           updateSearchIndexForNode(appState.focusedNode);
-
-          appState.updatingNode = false;
         } catch (error) {
           console.error("Summary generation error:", error);
-          appState.updatingNode = false;
         }
       }
       if (treeNav) {
@@ -487,14 +477,12 @@ async function updateFocusSummary() {
   if (
     (appState.focusedNode.type === "user" ||
       appState.focusedNode.type === "import") &&
-    appState.focusedNode.children.length === 0 &&
-    !appState.updatingNode
+    appState.focusedNode.children.length === 0
   ) {
     const currentFocus = appState.focusedNode;
     const newPrompt = DOM.editor.value;
     const prompt = appState.loomTree.renderNode(currentFocus);
 
-    appState.updatingNode = true;
     try {
       let summary = await llmService.generateSummary(prompt);
       if (summary.trim() === "") {
@@ -508,7 +496,6 @@ async function updateFocusSummary() {
 
       updateSearchIndexForNode(currentFocus);
     }
-    appState.updatingNode = false;
   }
 }
 
